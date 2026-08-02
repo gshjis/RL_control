@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import numpy as np
 
-from packages.controllers.PID import PIDController
 from packages.controllers.custom import SwingUp
 from packages.controllers.custom.swing_up_block import SwingUpAndBalance
+from packages.controllers.PID import PIDController
 from packages.simulation.CO import (
     ControllerConfig,
     NoiseForce,
@@ -46,7 +46,7 @@ PLANT_CONFIG = PlantConfig(
     backslash_mode=False,
 
     # === Начальное состояние ===
-    init_q=np.array([0.0,0, 0.0]),
+    init_q=np.array([0.0,np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
     dt=0.0001,
 )
@@ -68,7 +68,7 @@ SENSOR_CONFIG = SensorConfig(
 # ═══════════════════════════════════════════════════════════════════════════
 
 CONTROLLER_CONFIG = ControllerConfig(
-    dt=0.001,
+    dt=0.0001,
     max_force=24,
     has_velocity_sensors=True,
     filter_cutoff_hz=50.0,
@@ -91,7 +91,7 @@ if __name__ == "__main__":
         swingup_controller=swing_controller,
         balance_controller=pid_controller,
     )
-    controller.set_motor_inertia(time_constant=0.001)
+    controller.set_motor_inertia(time_constant=0.1)
 
     # Внешнее возмущение и целевое состояние
     NOISE = NoiseForce(mean=0.00, std=0.03)
@@ -103,6 +103,6 @@ if __name__ == "__main__":
         sensor_config=SENSOR_CONFIG,
         noise=NOISE,
         target_state=TARGET,
-        controller=controller,
+        controller=pid_controller,
     )
     viewer.use()

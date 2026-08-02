@@ -24,6 +24,7 @@ loggers = {path = "packages/loggers", develop = true}
 reinforce = {path = "packages/controllers/REINFORCE", develop = true}
 custom = {path = "packages/controllers/custom", develop = true}
 tqdm = "^4.68.3"
+statsmodels = "^0.14.6"
 
 [[tool.poetry.source]]
 name = "pytorch-cpu"
@@ -33,6 +34,7 @@ priority = "explicit"
 
 [tool.poetry.group.dev.dependencies]
 mlflow = "^3.13.0"
+ipykernel = "^7.3.0"
 
 [build-system]
 requires = ["poetry-core"]
