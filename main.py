@@ -13,12 +13,8 @@ from packages.simulation.CO import (
     PlantConfig,
     SensorConfig,
 )
-from packages.simulation.GUI import PendulumViewer
 from packages.simulation.ENV.env import PendulumEnv
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Конфигурация физической модели
-# ═══════════════════════════════════════════════════════════════════════════
+from packages.simulation.GUI import PendulumViewer
 
 PLANT_CONFIG = PlantConfig(
     M=1.0,
@@ -35,7 +31,7 @@ PLANT_CONFIG = PlantConfig(
     init_q=np.array([0.0, np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
     dt=0.0001,
-    motor_time_constant=0.05,  # инерция двигателя
+    motor_time_constant=0.05
 )
 
 SENSOR_CONFIG = SensorConfig(
@@ -56,10 +52,6 @@ CONTROLLER_CONFIG = ControllerConfig(
 NOISE = NoiseForce(mean=0.00, std=0.03)
 TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Точка входа
-# ═══════════════════════════════════════════════════════════════════════════
-
 if __name__ == "__main__":
 
     # ── PPO ──────────────────────────────────────────────────────────────
@@ -71,10 +63,6 @@ if __name__ == "__main__":
     ppo_controller = PPOController(
         ppo_config=ppo_config,
         controller_config=CONTROLLER_CONFIG,
-        plant_config=PLANT_CONFIG,
-        sensor_config=SENSOR_CONFIG,
-        noise=NOISE,
-        target_state=TARGET,
     )
 
     print("Обучение PPO...")
@@ -90,9 +78,14 @@ if __name__ == "__main__":
     )
     print("Обучение PPO завершено!")
 
+    # ── Сохранение модели + VecNormalize ────────────────────────────────
+    ppo_controller.save("checkpoints/ppo/final_model.zip")
+    print("Модель сохранена: checkpoints/ppo/final_model.zip")
+
     # ── Запуск GUI с обученным PPO ──────────────────────────────────────
     env = PendulumEnv(
-        PLANT_CONFIG, SENSOR_CONFIG, ppo_controller, NOISE, TARGET, 8
+        PLANT_CONFIG, SENSOR_CONFIG, ppo_controller, NOISE, TARGET,
+        max_force=CONTROLLER_CONFIG.max_force,
     )
     viewer = PendulumViewer(env=env)
     viewer.use()

@@ -1,192 +1,21 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Callable
+from collections.abc import Callable
+from typing import Any, Optional
 
 import numpy as np
+from loggers import Logger
 from numpy.typing import NDArray
 
 from packages.simulation.CO.datatypes import (
     ControllerConfig,
     NoiseForce,
+    PlantConfig,
+    SensorConfig,
 )
 from packages.simulation.CO.pendulum import ObjectOfControl
-from packages.simulation.CO.sensor import SensorBlock
-
-
-class Differentiator:
-    """
-    Блок численного дифференцирования с фильтрацией.
-
-    Вычисляет вектор скорости по последовательным измерениям координат
-    методом конечных разностей назад (backward difference).
-    Результат дополнительно сглаживается ФНЧ первого порядка (EMA)
-    для подавления шума квантования энкодеров.
-
-    Parameters
-    ----------
-    dt : float
-        Период дискретизации (с).
-    cutoff_hz : float | None
-        Частота среза ФНЧ для сглаживания скорости (Гц).
-        Если ``None`` — фильтрация отключена (сырая производная).
-
-    Notes
-    -----
-    Коэффициент сглаживания :math:`\\alpha = dt / (\\tau + dt)`,
-    где :math:`\\tau = 1 / (2\\pi f_{cut})`.
-
-    Optimization potential:
-        - ``np.zeros_like()`` на первом вызове можно заменить на
-          предварительно выделенный массив нулей (экономия аллокации).
-        - ``positions.copy()`` вызывается дважды за шаг; можно
-          переиспользовать буфер, если позволить модифицировать входной массив.
-        - EMA эквивалентен ``np.lerp(self._filtered, raw_vel, self._alpha)``
-          в NumPy ≥ 1.22 (одна операция вместо трёх).
-    """
-
-    def __init__(self, dt: float, cutoff_hz: float | None = None) -> None:
-        self._dt = float(dt)
-        self._prev_positions: NDArray[np.float64] | None = None
-        self._filtered_velocity: NDArray[np.float64] | None = None
-
-        # Коэффициент EMA-фильтра: alpha = dt / (tau + dt)
-        if cutoff_hz is not None and cutoff_hz > 0.0:
-            tau = 1.0 / (2.0 * np.pi * cutoff_hz)
-            self._alpha = self._dt / (tau + self._dt)
-        else:
-            self._alpha = 1.0  # без фильтрации
-
-    # ── Основной метод ────────────────────────────────────────────────────
-
-    def calculate_velocity(self, positions: np.ndarray) -> np.ndarray:
-        """
-        Вычислить скорость по текущему вектору координат.
-
-        На первом вызове (нет предыдущего измерения) возвращает нулевой вектор.
-
-        Parameters
-        ----------
-        positions : np.ndarray
-            Координаты ``(x, θ₁, θ₂)`` на текущем шаге (формат (3,)).
-
-        Returns
-        -------
-        np.ndarray
-            Скорости ``(ẋ, θ̇₁, θ̇₂)`` (формат (3,)).
-
-        Examples
-        --------
-        >>> diff = Differentiator(dt=0.01, cutoff_hz=30.0)
-        >>> vel = diff.calculate_velocity(np.array([0.0, np.pi, 0.0]))
-        >>> vel.shape
-        (3,)
-        """
-        if self._prev_positions is None:
-            self._prev_positions = positions.copy()
-            return np.zeros_like(positions)
-
-        # Сырая производная (backward difference)
-        raw_vel = (positions - self._prev_positions) / self._dt
-
-        # EMA-сглаживание
-        if self._filtered_velocity is None:
-            self._filtered_velocity = raw_vel.copy()
-        else:
-            self._filtered_velocity = (
-                (1.0 - self._alpha) * self._filtered_velocity
-                + self._alpha * raw_vel
-            )
-
-        self._prev_positions = positions.copy()
-        return self._filtered_velocity
-
-    # ── Сброс ─────────────────────────────────────────────────────────────
-
-    def reset(self) -> None:
-        """
-        Сбросить внутреннюю историю (вызывать перед каждым эпизодом).
-
-        После сброса следующий вызов ``calculate_velocity`` вернёт нули.
-        """
-        self._prev_positions = None
-        self._filtered_velocity = None
-
-
-class SignalFilter:
-    """
-    Блок экспоненциального сглаживания (ФНЧ первого порядка).
-
-    Реализует фильтр :math:`y_k = (1-\\alpha)\\cdot y_{k-1} + \\alpha\\cdot u_k`
-    с коэффициентом :math:`\\alpha = dt / (\\tau + dt)`, где
-    :math:`\\tau = 1 / (2\\pi f_{cut})`.
-
-    Parameters
-    ----------
-    cutoff_hz : float
-        Частота среза фильтра (Гц). Должна быть > 0.
-    dt : float
-        Период дискретизации (с).
-
-    Notes
-    -----
-    Optimization potential:
-        - Аналогично ``Differentiator``: ``np.lerp`` может заменить две
-          операции умножения.
-        - При больших ``pool_size`` в ``SensorBlock`` фильтр может быть
-          избыточен — шум уже усреднён пулом предвычисленных значений.
-    """
-
-    def __init__(self, cutoff_hz: float, dt: float) -> None:
-        tau = 1.0 / (2.0 * np.pi * cutoff_hz)
-        self._alpha: float = dt / (tau + dt)
-        self._filtered: NDArray[np.float64] | None = None
-
-    # ── Основной метод ────────────────────────────────────────────────────
-
-    def filter_signal(self, measurement: np.ndarray) -> np.ndarray:
-        """
-        Пропустить измерение через ФНЧ.
-
-        На первом вызове (нет предыдущего значения) возвращает копию входа.
-
-        Parameters
-        ----------
-        measurement : np.ndarray
-            Входной зашумлённый вектор состояния (формат (6,)).
-
-        Returns
-        -------
-        np.ndarray
-            Сглаженный вектор состояния (формат (6,)).
-
-        Examples
-        --------
-        >>> flt = SignalFilter(cutoff_hz=50.0, dt=0.005)
-        >>> out = flt.filter_signal(np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0]))
-        >>> out.shape
-        (6,)
-        """
-
-        if self._filtered is None:
-            self._filtered = measurement.copy()
-        else:
-            self._filtered = (
-                (1.0 - self._alpha) * self._filtered
-                + self._alpha * measurement
-            )
-
-        return self._filtered
-
-    # ── Сброс ─────────────────────────────────────────────────────────────
-
-    def reset(self) -> None:
-        """
-        Сбросить внутреннюю память фильтра.
-
-        После сброса следующий вызов ``filter_signal`` вернёт копию входа.
-        """
-        self._filtered = None
+from packages.simulation.CO.signal_processing import Differentiator, SignalFilter
 
 
 class Controller(ABC):
@@ -264,28 +93,6 @@ class Controller(ABC):
 
         # Память
         self._last_control_action: float = 0.0
-
-    def set_motor_inertia(self, time_constant: float) -> None:
-        """
-        Установить модель инерционности двигателя.
-
-        .. deprecated::
-            Инерционность двигателя перенесена в объект управления
-            (``PlantConfig.motor_time_constant``). Данный метод
-            ничего не делает и сохранён только для обратной совместимости.
-
-        Parameters
-        ----------
-        time_constant : float
-            Игнорируется. Установите ``motor_time_constant`` в ``PlantConfig``.
-        """
-        import warnings
-        warnings.warn(
-            "Motor inertia is now a property of the plant (PlantConfig.motor_time_constant). "
-            "set_motor_inertia() is deprecated and does nothing.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
 
     @property
     def last_control_action(self) -> float:
@@ -401,6 +208,48 @@ class Controller(ABC):
         -----
         Допускается возвращать значение за пределами ``[-max_force, +max_force]`` —
         ограничение будет применено в ``compute_control``.
+        """
+        ...
+
+    @abstractmethod
+    def train(
+        self,
+        plant_config: PlantConfig,
+        sensor_config: SensorConfig,
+        noise: NoiseForce,
+        target_state: np.ndarray,
+        terminate_condition: Callable[[ObjectOfControl], bool] | None = None,
+        episode_max_time: float = 150.0,
+        logger: Optional[Logger] = None,
+        *,
+        method_options: dict[str, Any] | None = None,
+    ) -> None:
+        """
+        Абстрактный метод обучения контроллера.
+
+        Единый интерфейс для всех алгоритмов управления. Специфичные
+        для конкретного алгоритма настройки передаются через
+        ``method_options`` (например, ``{"optimizer": ...}`` для PID,
+        ``{"epochs": ...}`` для PPO).
+
+        Parameters
+        ----------
+        plant_config : PlantConfig
+            Конфигурация физической модели.
+        sensor_config : SensorConfig
+            Конфигурация датчиков.
+        noise : NoiseForce
+            Параметры внешнего возмущения.
+        target_state : np.ndarray
+            Целевой вектор состояния.
+        terminate_condition : Callable | None
+            Условие досрочного завершения эпизода.
+        episode_max_time : float
+            Максимальная длительность эпизода (с).
+        logger : Logger | None
+            Опциональный логгер.
+        method_options : dict | None
+            Специфичные для алгоритма настройки.
         """
         ...
 

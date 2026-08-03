@@ -18,7 +18,6 @@ from packages.simulation.CO import (
     ObjectOfControl,
     SensorBlock,
     SensorConfig,
-    clock_cycle,
 )
 from packages.simulation.ENV.env import PendulumEnv
 
@@ -45,10 +44,10 @@ class PendulumViewer:
     """
     Pygame-визуализация перевёрнутого маятника на тележке.
 
-    Использует ``clock_cycle`` из ``run.py`` для корректного тактирования
+    Использует ``PendulumEnv.step()`` для корректного тактирования
     управления с имитацией вычислительной задержки.
     Отрисовка — 60 FPS. Симуляция идёт в реальном времени:
-    количество вызовов ``clock_cycle`` за кадр определяется накопленным
+    количество вызовов ``env.step()`` за кадр определяется накопленным
     временем относительно ``controller._dt``.
     """
 
@@ -101,12 +100,13 @@ class PendulumViewer:
         self._marker_dragging = False
         self._drag_offset_x = 0
         self._last_marker_update_ms = 0
-        self._controller_enabled = True if self._env._controller is not None else False
+        self._controller_enabled = True if self._env.controller is not None else False
+        self._controller = self._env.controller
         self._controller_backup = None
 
         # Аккумулятор симуляционного времени (сек).
         # На каждом кадре добавляем реально прошедшее время dt_sec,
-        # и вызываем clock_cycle, пока накопление >= controller._dt.
+        # и вызываем env.step(), пока накопление >= controller._dt.
         self._sim_accumulator: float = 0.0
 
         # Буферы для графиков (deque — для отрисовки, ограниченный размер)
@@ -205,16 +205,19 @@ class PendulumViewer:
                 running = False
 
             # ── 2. СИМУЛЯЦИЯ ───────────────────────────────────────────
-            if self._env.controller is not None:
+            if self._controller is not None:
                 self._sim_accumulator += dt_sec
-                dt_ctrl = self._env.controller.dt
+                dt_ctrl = self._controller.dt
                 while self._sim_accumulator >= dt_ctrl:
-                    
                     measured_s = self._env._get_observation()
                     target_s = self._env.target_state
-                    action = self._env.controller.action(measured_s,target_s)
-                    obs,r,terminated,truncated,info = self._env.step(action)
+                    action = self._controller.action(measured_s, target_s)
+                    obs, r, terminated, truncated, info = self._env.step(action)
                     self._sim_accumulator -= dt_ctrl
+                    # Автоматический сброс при завершении эпизода
+                    if terminated or truncated:
+                        self._reset()
+                        break
 
             # ── 3. СБРОС ──────────────────────────────────────────────
             if keys[pygame.K_SPACE]:

@@ -10,8 +10,8 @@ from loggers import Logger
 from packages.controllers.PID.pid import PIDController, terminate_condition
 from packages.simulation.CO.datatypes import NoiseForce
 from packages.simulation.CO.pendulum import ObjectOfControl
-from packages.simulation.CO.run import clock_cycle
 from packages.simulation.CO.sensor import SensorBlock
+from packages.simulation.ENV.env import PendulumEnv
 
 
 class Zigler_Nikols:
@@ -52,8 +52,7 @@ class Zigler_Nikols:
     def optimize(
         self,
         controller: PIDController,
-        plant: ObjectOfControl,
-        sensor: SensorBlock,
+        env: PendulumEnv,
         noise: NoiseForce,
         target_state: np.ndarray,
         terminate_condition: Callable[[ObjectOfControl], bool] | None,
@@ -113,20 +112,22 @@ class Zigler_Nikols:
                 [19.04, fixed_Ki, fixed_Kd, fixed_Kx, fixed_Kdx], dtype=float
             )
 
-            plant.reset()
+            env.reset()
             controller.reset()
+            obs, _ = env.reset()
 
             sin_theta = np.empty(max_steps, dtype=float)
-            F = 0.0
 
             for step in range(max_steps):
-                _, F = clock_cycle(
-                    controller, plant, sensor, noise, F, target_state, cf.J
-                )
-                sin_theta[step] = np.sin(plant.q[1])
+                action = controller.action(obs[:6], target_state)
+                obs, reward, terminated, truncated, info = env.step(action)
+                sin_theta[step] = np.sin(env.plant.q[1])
 
-                if terminate_condition is not None and terminate_condition(plant):
-                    sin_theta[step:] = np.sin(plant.q[1])
+                if terminated or (
+                    terminate_condition is not None
+                    and terminate_condition(env.plant)
+                ):
+                    sin_theta[step:] = np.sin(env.plant.q[1])
                     break
 
             # ── Построение графика ──────────────────────────────────────
@@ -282,8 +283,7 @@ class Genetic_PID_AngleOnly:
     def optimize(
         self,
         controller: PIDController,
-        plant: ObjectOfControl,
-        sensor: SensorBlock,
+        env: PendulumEnv,
         noise: NoiseForce,
         target_state: np.ndarray | Callable,
         terminate_condition: Callable[[ObjectOfControl], bool],
@@ -361,17 +361,20 @@ class Genetic_PID_AngleOnly:
         # ─── Fitness ──────────────────────────────────────────────────────
         def fitness_hold(Kp: float, Ki: float, Kd: float) -> float:
             _set_gains(Kp, Ki, Kd)
-            plant.reset()
+            env.reset()
             controller.reset()
-            F = 0.0
+            obs, _ = env.reset()
             stable_counter = 0
 
             for step in range(max_steps):
-                _, F = clock_cycle(controller, plant, sensor, noise, F, target_state, cf.J)
-                if terminate_condition and terminate_condition(plant):
+                action = controller.action(obs[:6], target_state)
+                obs, reward, terminated, truncated, info = env.step(action)
+                if terminated or (
+                    terminate_condition and terminate_condition(env.plant)
+                ):
                     return 1e6 + float(step)
 
-                if abs(plant.q[1] - angle_goal) < early_stop_angle:
+                if abs(env.plant.q[1] - angle_goal) < early_stop_angle:
                     stable_counter += 1
                     if stable_counter >= early_stop_steps:
                         return 0.0

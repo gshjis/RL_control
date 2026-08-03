@@ -43,7 +43,7 @@ class SensorBlock:
         noise_std_dq: NDArray[np.float64] = np.asarray(config.noise_std_dq, dtype=np.float64)
         self._std: NDArray[np.float64] = np.concat([noise_std_q, noise_std_dq])
 
-        self._pool_size: int = 2_000_000
+        self._pool_size: int = int(config.noise_pool_size)
         self._noise_pool: NDArray[np.float64] = self._rng.normal(
             0.0, self._std,
             size=(self._pool_size, 6)

@@ -12,9 +12,9 @@ from packages.simulation.CO import (
     PlantConfig,
     SensorBlock,
     SensorConfig,
-    clock_cycle,
     NoiseForce
 )
+from packages.simulation.ENV.env import PendulumEnv
 
 
 def terminate_condition(state: ObjectOfControl) -> bool:
@@ -168,62 +168,6 @@ class PIDController(Controller):
         super().reset()
         self._integral = 0.0
 
-    # ── Внутренний метод: прогон эпизода ──────────────────────────────────
-
-    def _run_episode(
-        self,
-        plant: ObjectOfControl,
-        sensor: SensorBlock,
-        noise: NoiseForce,
-        max_time: float,
-        target_state: np.ndarray,
-        terminate_condition: Callable[[ObjectOfControl], bool] | None = None,
-    ) -> tuple[float, float]:
-        """
-        Прогнать один эпизод симуляции и вернуть суммарную стоимость.
-
-        Parameters
-        ----------
-        plant : ObjectOfControl
-            Физическая модель.
-        sensor : SensorBlock
-            Блок датчиков.
-        noise : NoiseForce
-            Внешнее возмущение.
-        max_time : float
-            Максимальная длительность эпизода (с).
-        target_state : np.ndarray
-            Целевой вектор состояния.
-        terminate_condition : Callable | None
-            Функция досрочного завершения.
-
-        Returns
-        -------
-        tuple[float, float]
-            ``(суммарная стоимость J, длительность эпизода в с)``.
-
-        Notes
-        -----
-        Optimization potential:
-            - Создание массивов ``trajectory`` для логирования можно
-              сделать опциональным (сейчас не используется).
-        """
-        dt_control = self._dt
-        max_steps = int(max_time / dt_control)
-
-        self.reset()
-        F_raw = 0.0
-        J = 0.0
-
-        step = 0
-        for step in range(max_steps):
-            J_, F_raw = clock_cycle(self, plant, sensor, noise, F_raw, target_state, cost_f.J)
-            if terminate_condition is not None and terminate_condition(plant):
-                break
-            J += J_
-
-        return float(J), (step + 1) * dt_control
-
     # ── Обучение ──────────────────────────────────────────────────────────
 
     def train(
@@ -231,7 +175,6 @@ class PIDController(Controller):
         plant_config: PlantConfig,
         sensor_config: SensorConfig,
         noise: NoiseForce,
-        optimizer,
         target_state: np.ndarray | Callable,
         terminate_condition: Callable[[ObjectOfControl], bool] | None = None,
         episode_max_time: float = 150.0,
@@ -242,8 +185,8 @@ class PIDController(Controller):
         """
         Запустить оптимизацию коэффициентов ПИД-регулятора.
 
-        Создаёт экземпляры ``ObjectOfControl`` и ``SensorBlock``,
-        затем вызывает ``optimizer.optimize()`` для подбора коэффициентов.
+        Создаёт единую Gym-среду ``PendulumEnv`` с PID-контроллером
+        и вызывает ``optimizer.optimize()`` для подбора коэффициентов.
 
         Parameters
         ----------
@@ -253,8 +196,6 @@ class PIDController(Controller):
             Конфигурация датчиков.
         noise : NoiseForce
             Параметры внешнего возмущения.
-        optimizer : Zigler_Nikols | Genetic_PID_AngleOnly
-            Объект оптимизатора с методом ``optimize``.
         target_state : np.ndarray | Callable
             Целевое состояние или функция его генерации.
         terminate_condition : Callable | None
@@ -264,18 +205,31 @@ class PIDController(Controller):
         logger : Logger | None
             Логгер для визуализации/логирования.
         method_options : dict | None
-            Дополнительные параметры для оптимизатора.
+            Дополнительные параметры. Обязательный ключ ``optimizer`` —
+            объект оптимизатора с методом ``optimize``.
         """
-        plant = ObjectOfControl(plant_config)
-        sensor = SensorBlock(sensor_config)
-        a = optimizer.optimize(
+        method_options = method_options or {}
+        optimizer = method_options.get("optimizer")
+        if optimizer is None:
+            raise ValueError(
+                "PIDController.train() требует method_options['optimizer']"
+            )
+
+        env = PendulumEnv(
+            plant_config=plant_config,
+            sensor_config=sensor_config,
+            controller=self,
+            noise_force=noise,
+            target_state=target_state,
+            max_force=self._max_force,
+        )
+        result = optimizer.optimize(
             self,
-            plant,
-            sensor,
+            env,
             noise,
             target_state,
             terminate_condition,
             episode_max_time,
-            logger
+            logger,
         )
-        print(a)
+        print(result)

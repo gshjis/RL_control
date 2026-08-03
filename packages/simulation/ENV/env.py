@@ -5,10 +5,10 @@ from typing import Any, Callable
 import gymnasium as gym
 import numpy as np
 
+from packages.simulation.CO import Controller
 from packages.simulation.CO.datatypes import NoiseForce, PlantConfig, SensorConfig
 from packages.simulation.CO.pendulum import ObjectOfControl
 from packages.simulation.CO.sensor import SensorBlock
-from packages.simulation.CO import Controller
 
 
 class PendulumEnv(gym.Env):
@@ -226,7 +226,9 @@ class PendulumEnv(gym.Env):
         Вычислить награду за текущий шаг.
 
         Если задана пользовательская ``reward_function`` — использует её.
-        Иначе — квадратичный штраф за отклонение от целевого состояния.
+        Иначе — отрицательная сумма квадратов разниц (штраф за отклонение
+        от целевого состояния). RL-агент максимизирует награду, поэтому
+        штраф отрицательный.
 
         Parameters
         ----------
@@ -242,23 +244,9 @@ class PendulumEnv(gym.Env):
         if self._reward_function is not None:
             return self._reward_function(self._target_state, state)
 
-        # Квадратичный штраф за отклонение от цели
+        # По умолчанию: отрицательная сумма квадратов разниц
         error = state - self._target_state
-        # Веса: угол важнее позиции, скорости — меньше
-        w_x = 1.0
-        w_theta = 10.0
-        w_dx = 0.5
-        w_dtheta = 0.5
-        reward = -(
-            w_x * error[0]**2
-            + w_theta * error[1]**2
-            + w_dx * error[3]**2
-            + w_dtheta * error[4]**2
-        )
-        # Бонус за удержание вблизи цели
-        if abs(error[0]) < 0.05 and abs(error[1]) < 0.05:
-            reward += 1.0
-        return float(reward)
+        return float(-np.dot(error, error))
 
     def _check_terminated(self) -> bool:
         """

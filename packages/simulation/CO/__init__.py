@@ -1,31 +1,28 @@
-from .controller import Controller, Differentiator, SignalFilter
+from .controller import Controller
 from .datatypes import (
     ControllerConfig,
     NoiseForce,
     PlantConfig,
     SensorConfig,
 )
-from .engine import MotorInertia
 from .pendulum import BacklashModel, ObjectOfControl
 from .sensor import SensorBlock
-from .run import clock_cycle
+from .signal_processing import Differentiator, SignalFilter
 
 __all__ = [
-    # controller
-    "Controller",
-    "Differentiator",
-    "SignalFilter",
-    "clock_cycle",
-    # datatypes
-    "NoiseForce",
-    "PlantConfig",
-    "SensorConfig",
-    "ControllerConfig",
-    # engine
-    "MotorInertia",
     # pendulum
     "BacklashModel",
+    # controller
+    "Controller",
+    "ControllerConfig",
+    # signal processing
+    "Differentiator",
+    # datatypes
+    "NoiseForce",
     "ObjectOfControl",
+    "PlantConfig",
     # sensor
     "SensorBlock",
+    "SensorConfig",
+    "SignalFilter",
 ]

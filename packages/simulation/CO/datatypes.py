@@ -261,6 +261,7 @@ class SensorConfig:
         0.02,
     )
     seed: int | None = None
+    noise_pool_size: int = 2_000_000
 
     def to_dict(self) -> dict:
         """
@@ -278,6 +279,7 @@ class SensorConfig:
             "noise_std_q": list(self.noise_std_q),
             "noise_std_dq": list(self.noise_std_dq),
             "seed": self.seed,
+            "noise_pool_size": self.noise_pool_size,
         }
 
 

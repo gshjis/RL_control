@@ -4,20 +4,19 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import numpy as np
+from loggers import Logger
 from stable_baselines3 import PPO as SB3_PPO
 from stable_baselines3.common.callbacks import (
     CheckpointCallback,
     EvalCallback,
     StopTrainingOnRewardThreshold,
 )
-from stable_baselines3.common.vec_env import DummyVecEnv
-
-from controller import Controller
-from datatypes import ControllerConfig
-from loggers import Logger
+from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
 
 from packages.controllers.PPO.mode_config import PPOConfig
 from packages.simulation.CO import (
+    Controller,
+    ControllerConfig,
     NoiseForce,
     ObjectOfControl,
     PlantConfig,
@@ -60,20 +59,12 @@ class PPOController(Controller):
         self,
         ppo_config: PPOConfig,
         controller_config: ControllerConfig,
-        plant_config: PlantConfig,
-        sensor_config: SensorConfig,
-        noise: NoiseForce,
-        target_state: np.ndarray,
         model: SB3_PPO | None = None,
     ) -> None:
         super().__init__(controller_config)
         self.name = "PPO"
 
         self._ppo_config = ppo_config
-        self._plant_config = plant_config
-        self._sensor_config = sensor_config
-        self._noise = noise
-        self._target_state = target_state
 
         # SB3-модель (создаётся в train() или загружается из файла)
         self._model: SB3_PPO | None = model
@@ -81,7 +72,33 @@ class PPOController(Controller):
         # Внутренняя среда для get_action
         self._env: PendulumEnv | None = None
 
+        # Нормализация наблюдений и наград (VecNormalize)
+        self._vec_normalize: VecNormalize | None = None
+
     # ── Закон управления (абстрактный метод Controller) ──────────────────
+
+    def action(self, measured_state: np.ndarray, target_state: np.ndarray) -> float:
+        """
+        Получить действие от обученной PPO-политики.
+
+        PPO получает **сырое** состояние (без фильтрации), как при обучении.
+        Переопределяет Template Method ``Controller.action()``, который
+        фильтрует состояние — для нейросети это не нужно (она сама учится
+        обрабатывать шум датчиков).
+
+        Parameters
+        ----------
+        measured_state : np.ndarray
+            Сырое (зашумлённое/квантованное) состояние с датчиков (6,).
+        target_state : np.ndarray
+            Целевой вектор состояния (6,).
+
+        Returns
+        -------
+        float
+            Управляющая сила (Н).
+        """
+        return self.get_control(measured_state, target_state)
 
     def get_control(self, s_clean: np.ndarray, target_state: np.ndarray) -> float:
         """
@@ -107,6 +124,8 @@ class PPOController(Controller):
 
         obs = np.concat([np.asarray(s_clean, dtype=np.float64),
                          np.asarray(target_state, dtype=np.float64)])
+        if self._vec_normalize is not None:
+            obs = np.asarray(self._vec_normalize.normalize_obs(obs[None, :]))[0]
         action, _ = self._model.predict(obs, deterministic=True)
         return float(action.item())
 
@@ -120,8 +139,6 @@ class PPOController(Controller):
         target_state: np.ndarray,
         terminate_condition: Callable[[ObjectOfControl], bool] | None = None,
         episode_max_time: float = 150.0,
-        epochs: int = 1000,
-        episodes_per_epoch: int = 100,
         logger: Optional[Logger] = None,
         *,
         method_options: dict[str, Any] | None = None,
@@ -141,7 +158,7 @@ class PPOController(Controller):
 
         # ── Фабрика среды ───────────────────────────────────────────────
         def make_env() -> PendulumEnv:
-            return PendulumEnv(
+            env = PendulumEnv(
                 plant_config=plant_config,
                 sensor_config=sensor_config,
                 controller=self,
@@ -150,8 +167,19 @@ class PPOController(Controller):
                 max_force=self._max_force,
                 max_episode_steps=ppo_cfg.max_episode_steps,
             )
+            # Сохраняем ссылку для корректного закрытия в reset()
+            self._env = env
+            return env
 
         vec_env = DummyVecEnv([make_env])
+        # Нормализация наблюдений и наград
+        vec_env = VecNormalize(
+            vec_env,
+            norm_obs=True,
+            norm_reward=True,
+            clip_obs=10.0,
+        )
+        self._vec_normalize = vec_env
 
         # ── Callback'и ──────────────────────────────────────────────────
         ckpt_dir = Path("checkpoints") / self.name.lower()
@@ -167,6 +195,15 @@ class PPOController(Controller):
             verbose=1,
         )
         eval_env = DummyVecEnv([make_env])
+        eval_env = VecNormalize(
+            eval_env,
+            norm_obs=True,
+            norm_reward=True,
+            clip_obs=10.0,
+        )
+        # Eval-среда не должна обновлять статистики нормализации
+        eval_env.training = False
+        eval_env.norm_reward = False
         eval_callback = EvalCallback(
             eval_env,
             best_model_save_path=str(ckpt_dir / "best"),
@@ -188,6 +225,7 @@ class PPOController(Controller):
             clip_range=ppo_cfg.clip_range,
             ent_coef=ppo_cfg.ent_coef,
             max_grad_norm=ppo_cfg.max_grad_norm,
+            policy_kwargs=dict(net_arch=ppo_cfg.net_arch),
             verbose=1,
         )
 
@@ -197,11 +235,19 @@ class PPOController(Controller):
             callback=[checkpoint_callback, eval_callback],
         )
 
+        # Сохранить VecNormalize рядом с best_model (для корректного инференса)
+        if self._vec_normalize is not None:
+            best_path = str(ckpt_dir / "best" / "best_model.zip")
+            self._vec_normalize.save(best_path + "_vecnormalize.pkl")
+
     # ── Сохранение / загрузка ───────────────────────────────────────────
 
     def save(self, path: str | Path) -> None:
         """
         Сохранить PPO-модель SB3 в файл.
+
+        Параметры нормализации (``VecNormalize``) сохраняются в отдельный
+        файл ``<path>_vecnormalize.pkl``.
 
         Parameters
         ----------
@@ -213,6 +259,8 @@ class PPOController(Controller):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         self._model.save(str(path))
+        if self._vec_normalize is not None:
+            self._vec_normalize.save(str(path) + "_vecnormalize.pkl")
 
     @classmethod
     def from_pretrained(
@@ -220,10 +268,6 @@ class PPOController(Controller):
         path: str | Path,
         ppo_config: PPOConfig,
         controller_config: ControllerConfig,
-        plant_config: PlantConfig,
-        sensor_config: SensorConfig,
-        noise: NoiseForce,
-        target_state: np.ndarray,
     ) -> PPOController:
         """
         Создать PPOController с предобученной моделью.
@@ -236,14 +280,6 @@ class PPOController(Controller):
             Гиперпараметры PPO.
         controller_config : ControllerConfig
             Конфигурация базового контроллера.
-        plant_config : PlantConfig
-            Конфигурация физической модели.
-        sensor_config : SensorConfig
-            Конфигурация сенсоров.
-        noise : NoiseForce
-            Параметры внешнего возмущения.
-        target_state : np.ndarray
-            Целевой вектор состояния.
 
         Returns
         -------
@@ -251,19 +287,22 @@ class PPOController(Controller):
             Экземпляр с загруженной моделью.
         """
         model = SB3_PPO.load(str(path))
-        return cls(
+        instance = cls(
             ppo_config=ppo_config,
             controller_config=controller_config,
-            plant_config=plant_config,
-            sensor_config=sensor_config,
-            noise=noise,
-            target_state=target_state,
             model=model,
         )
+        vn_path = str(path) + "_vecnormalize.pkl"
+        if Path(vn_path).exists():
+            instance._vec_normalize = VecNormalize.load(vn_path, venv=None)  # type: ignore[arg-type]
+        return instance
 
     def load(self, path: str | Path) -> None:
         """
         Загрузить PPO-модель SB3 из файла.
+
+        Параметры нормализации (``VecNormalize``) загружаются из
+        ``<path>_vecnormalize.pkl``, если файл существует.
 
         Parameters
         ----------
@@ -271,6 +310,9 @@ class PPOController(Controller):
             Путь к файлу (.zip).
         """
         self._model = SB3_PPO.load(str(path))
+        vn_path = str(path) + "_vecnormalize.pkl"
+        if Path(vn_path).exists():
+            self._vec_normalize = VecNormalize.load(vn_path, venv=None)  # type: ignore[arg-type]
 
     # ── Сброс ───────────────────────────────────────────────────────────
 

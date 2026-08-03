@@ -20,7 +20,13 @@ import numpy as np
 root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
 
-from packages.simulation.CO.datatypes import NoiseForce, PlantConfig, SensorConfig
+from packages.controllers.PID.pid import PIDController
+from packages.simulation.CO.datatypes import (
+    ControllerConfig,
+    NoiseForce,
+    PlantConfig,
+    SensorConfig,
+)
 from packages.simulation.ENV.env import PendulumEnv
 
 
@@ -56,14 +62,15 @@ def main() -> None:
     target = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
 
     # ── Создание среды ──────────────────────────────────────────────────
+    controller = PIDController(ControllerConfig(dt=0.005, max_force=24.0))
     env = PendulumEnv(
         plant_config=plant_cfg,
         sensor_config=sensor_cfg,
+        controller=controller,
         noise_force=noise,
         target_state=target,
         max_force=24.0,
         max_episode_steps=2000,
-        dt_control=0.005,
     )
 
     # ── Профилирование ──────────────────────────────────────────────────
