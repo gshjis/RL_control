@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Callable
 
 import numpy as np
 from numpy.typing import NDArray
 
 from packages.simulation.CO.datatypes import (
     ControllerConfig,
+    NoiseForce,
 )
 from packages.simulation.CO.engine import MotorInertia
+from packages.simulation.CO.pendulum import ObjectOfControl
+from packages.simulation.CO.sensor import SensorBlock
 
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -1,15 +1,14 @@
 """
-Основной скрипт симуляции перевёрнутого маятника.
-Запускает Pygame-визуализацию с PID-регулятором и SwingUp-раскачкой.
+Основной скрипт: обучение PPO-контроллера и запуск GUI-симуляции.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 
-from packages.controllers.custom import SwingUp
-from packages.controllers.custom.swing_up_block import SwingUpAndBalance
-from packages.controllers.PID import PIDController
+from packages.controllers.PPO import PPOConfig, PPOController
 from packages.simulation.CO import (
     ControllerConfig,
     NoiseForce,
@@ -20,59 +19,52 @@ from packages.simulation.CO import (
 from packages.simulation.GUI import PendulumViewer
 
 # ═══════════════════════════════════════════════════════════════════════════
-# Конфигурация физической модели (тележка + двухзвенный маятник)
+# Конфигурация физической модели
 # ═══════════════════════════════════════════════════════════════════════════
 
 PLANT_CONFIG = PlantConfig(
-    # === Тележка ===
     M=1.0,
-
-    # === Нижнее звено ===
     m1=0.1,
     l1=0.3,
-    b_1=0.003,
-
-    # === Верхнее звено ===
     m2=0.1,
     l2=0.3,
-    b_2=0.003,
-
-    # === Общие ===
     g=-9.81,
     b_c=0.1,
-
-    # === Режимы ===
+    b_1=0.003,
+    b_2=0.003,
     single_pendulum_mode=True,
     backslash_mode=False,
-
-    # === Начальное состояние ===
-    init_q=np.array([0.0,np.pi, 0.0]),
+    init_q=np.array([0.0, np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
     dt=0.0001,
 )
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Конфигурация датчиков
-# ═══════════════════════════════════════════════════════════════════════════
-
 SENSOR_CONFIG = SensorConfig(
-    encoder_resolution_1=4096,     # 12 бит — 4096 отсчётов на оборот
+    encoder_resolution_1=4096,
     encoder_resolution_2=4096,
-    cart_sensor_resolution=0.0001, # 0.1 мм
-    noise_std_q=(0.0005, 0.002, 0.002),   # ~0.03° по углам
-    noise_std_dq=(0.005, 0.01, 0.01),     # скорости
+    cart_sensor_resolution=0.0001,
+    noise_std_q=(0.0005, 0.002, 0.002),
+    noise_std_dq=(0.005, 0.01, 0.01),
 )
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Конфигурация контроллера
-# ═══════════════════════════════════════════════════════════════════════════
 
 CONTROLLER_CONFIG = ControllerConfig(
-    dt=0.0001,
-    max_force=24,
-    has_velocity_sensors=True,
+    dt=0.001,
+    max_force=24.0,
+    has_velocity_sensors=False,
     filter_cutoff_hz=50.0,
 )
+
+PPO_CFG = PPOConfig(
+    total_timesteps=500_000,
+    max_episode_steps=10000,
+    dt_control=0.001,
+)
+
+NOISE = NoiseForce(mean=0.00, std=0.03)
+TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
+
+MODEL_PATH = Path("models") / "ppo_controller.zip"
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Точка входа
@@ -80,29 +72,47 @@ CONTROLLER_CONFIG = ControllerConfig(
 
 if __name__ == "__main__":
 
-    # Контроллеры
-    swing_controller = SwingUp(CONTROLLER_CONFIG, K=150, plant_config=PLANT_CONFIG)
-    pid_controller = PIDController(
-        CONTROLLER_CONFIG,
-        gains=np.array([80.42, 0.0, 30.71, -10, -15]),
+    # ── Создание контроллера ────────────────────────────────────────────
+    controller = PPOController(
+        ppo_config=PPO_CFG,
+        controller_config=CONTROLLER_CONFIG,
+        plant_config=PLANT_CONFIG,
+        sensor_config=SENSOR_CONFIG,
+        noise=NOISE,
+        target_state=TARGET,
     )
-    controller = SwingUpAndBalance(
-        CONTROLLER_CONFIG,
-        swingup_controller=swing_controller,
-        balance_controller=pid_controller,
-    )
-    controller.set_motor_inertia(time_constant=0.1)
 
-    # Внешнее возмущение и целевое состояние
-    NOISE = NoiseForce(mean=0.00, std=0.03)
-    TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])  # (x, θ₁, θ₂, ẋ, θ̇₁, θ̇₂)
+    # ── Обучение или загрузка ───────────────────────────────────────────
+    if MODEL_PATH.exists():
+        print(f"Загрузка предобученной модели: {MODEL_PATH}")
+        controller = PPOController.from_pretrained(
+            path=MODEL_PATH,
+            ppo_config=PPO_CFG,
+            controller_config=CONTROLLER_CONFIG,
+            plant_config=PLANT_CONFIG,
+            sensor_config=SENSOR_CONFIG,
+            noise=NOISE,
+            target_state=TARGET,
+        )
+    else:
+        print("Обучение PPO-контроллера...")
+        controller.train(
+            plant_config=PLANT_CONFIG,
+            sensor_config=SENSOR_CONFIG,
+            noise=NOISE,
+            target_state=TARGET,
+        )
+        MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+        controller.save(MODEL_PATH)
+        print(f"Модель сохранена: {MODEL_PATH}")
 
-    # Запуск визуализации
+    # ── Запуск GUI ──────────────────────────────────────────────────────
+    print("Запуск GUI-симуляции...")
     viewer = PendulumViewer(
         plant=ObjectOfControl(PLANT_CONFIG),
         sensor_config=SENSOR_CONFIG,
         noise=NOISE,
         target_state=TARGET,
-        controller=pid_controller,
+        controller=controller,
     )
     viewer.use()
