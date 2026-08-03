@@ -124,7 +124,7 @@ class PIDController(Controller):
 
     # ── Закон управления ──────────────────────────────────────────────────
 
-    def get_action(self, s_clean: np.ndarray, target_state: np.ndarray) -> float:
+    def get_control(self, s_clean: np.ndarray, target_state: np.ndarray) -> float:
         """
         Вычислить управляющее воздействие по ПИД-закону.
 

@@ -3,7 +3,6 @@ Pygame-визуализация перевёрнутого маятника.
 """
 
 from __future__ import annotations
-
 import csv
 import os
 import sys
@@ -21,21 +20,22 @@ from packages.simulation.CO import (
     SensorConfig,
     clock_cycle,
 )
+from packages.simulation.ENV.env import PendulumEnv
+
 from .constants import *
 from .dialogs import ask_recording, ask_save_video
-from .recorder import compile_video
 from .draw import (
     draw_cart,
-    draw_pendulums,
+    draw_controller_button,
+    draw_error_graph,
     draw_force_arrow,
     draw_hud,
+    draw_pendulums,
     draw_sine_graph,
-    draw_error_graph,
     draw_target_marker,
-    draw_controller_button,
 )
 from .event_controller import EventController
-
+from .recorder import compile_video
 
 # ═══════════════════════════════════════════════════════════════════════════
 # PendulumViewer
@@ -54,24 +54,9 @@ class PendulumViewer:
 
     def __init__(
         self,
-        plant: ObjectOfControl,
-        sensor_config: SensorConfig,
-        noise: NoiseForce,
-        target_state: np.ndarray,
-        controller: Controller | None = None,
-        terminate_condition: Callable[[ObjectOfControl], bool] | None = None,
+        env: PendulumEnv,
     ) -> None:
-        self._plant = plant
-        self._init_q = plant.q.copy()
-        self._init_dq = plant.dq.copy()
-        self._sensor = SensorBlock(sensor_config)
-        self._noise = noise
-        self._controller = controller
-        self._target = target_state
-        self._terminate_condition = terminate_condition
-
-        self._terminated = False
-        self._elapsed_when_terminated: int | None = None
+        self._env = env
         self._F: float = 0.0  # Текущая сила, применяемая к маятнику
 
         # Pygame
@@ -81,7 +66,7 @@ class PendulumViewer:
         self._font = pygame.font.SysFont("Consolas", 16, bold=True)
 
         title = "Перевёрнутый маятник"
-        title += f" — {controller.name}" if controller else " — ручное управление"
+        title += f" — {self._env.controller.name}" if self._env.controller else " — ручное управление"
         title += "  (Пробел сброс, Q / ESC выход)"
         pygame.display.set_caption(title)
 
@@ -94,10 +79,16 @@ class PendulumViewer:
 
         # Target marker
         from .constants import (
-            MARKER_COLOR, MARKER_HOVER_COLOR, MARKER_SPEED,
-            MARKER_THROTTLE_MS, MARKER_MIN_X, MARKER_MAX_X,
-            MARKER_W, MARKER_H
+            MARKER_COLOR,
+            MARKER_H,
+            MARKER_HOVER_COLOR,
+            MARKER_MAX_X,
+            MARKER_MIN_X,
+            MARKER_SPEED,
+            MARKER_THROTTLE_MS,
+            MARKER_W,
         )
+
         self._marker_color = MARKER_COLOR
         self._marker_hover_color = MARKER_HOVER_COLOR
         self._marker_speed = MARKER_SPEED
@@ -106,22 +97,17 @@ class PendulumViewer:
         self._marker_max_x = MARKER_MAX_X
         self._marker_w = MARKER_W
         self._marker_h = MARKER_H
-        self._marker_x = float(self._target[0])
+        self._marker_x = float(self._env.target_state[0])
         self._marker_dragging = False
         self._drag_offset_x = 0
         self._last_marker_update_ms = 0
-        self._controller_enabled = True if self._controller is not None else False
+        self._controller_enabled = True if self._env._controller is not None else False
         self._controller_backup = None
 
         # Аккумулятор симуляционного времени (сек).
         # На каждом кадре добавляем реально прошедшее время dt_sec,
         # и вызываем clock_cycle, пока накопление >= controller._dt.
         self._sim_accumulator: float = 0.0
-
-        # Функция стоимости для clock_cycle (квадрат ошибки)
-        self._cost_fn: Callable[[np.ndarray, np.ndarray], float] = (
-            lambda t, m: float(np.dot(t - m, t - m))
-        )
 
         # Буферы для графиков (deque — для отрисовки, ограниченный размер)
         self._sin1_history: deque[float] = deque(maxlen=800)
@@ -154,18 +140,19 @@ class PendulumViewer:
         self._start_ticks = pygame.time.get_ticks()
         prev_ticks = pygame.time.get_ticks()
         last_save_acc_ms = 0
-
         while running:
             now = pygame.time.get_ticks()
             dt_ms = now - prev_ticks
             prev_ticks = now
             dt_sec = dt_ms / 1000.0
+            
 
             # ── 1. ОБРАБОТКА СОБЫТИЙ ──────────────────────────────────
             actions = self._event_controller.poll()
+            
 
             # Стрелки для перемещения цели
-            if self._controller is not None:
+            if self._env._controller is not None:
                 keys = pygame.key.get_pressed()
                 changed = False
                 if keys[pygame.K_LEFT]:
@@ -181,7 +168,7 @@ class PendulumViewer:
                         self._marker_x += 0.05
                     changed = True
                 if changed:
-                    self._target[0] = float(self._marker_x)
+                    self._env.target_state[0] = float(self._marker_x)
                     self._last_marker_update_ms = now
 
             self._last_events = actions.get("events", [])
@@ -190,6 +177,7 @@ class PendulumViewer:
                 running = False
                 if actions.get("quit", False):
                     break
+            
 
             # Переключение записи
             if actions.get("toggle_record", False):
@@ -198,6 +186,7 @@ class PendulumViewer:
             # Переключение контроллера (клавиша C)
             if actions.get("toggle_controller", False):
                 self._toggle_controller()
+            
 
             # Переключение контроллера по клику на кнопке
             mx_my = actions.get("mouse_pos")
@@ -209,66 +198,48 @@ class PendulumViewer:
                     and ctrl_btn[1] <= my <= ctrl_btn[1] + ctrl_btn[3]
                 ):
                     self._toggle_controller()
+            
 
             keys = pygame.key.get_pressed()
             if keys[pygame.K_ESCAPE] or keys[pygame.K_q]:
                 running = False
 
             # ── 2. СИМУЛЯЦИЯ ───────────────────────────────────────────
-            if not self._terminated:
-                if self._controller is not None:
-                    # Режим автоматического управления: используем clock_cycle
-                    # с фиксированным шагом controller._dt.
-                    self._sim_accumulator += dt_sec
-                    dt_ctrl = self._controller._dt
-                    while self._sim_accumulator >= dt_ctrl:
-                        _, self._F = clock_cycle(
-                            self._controller,
-                            self._plant,
-                            self._sensor,
-                            self._noise,
-                            self._F,
-                            self._target,
-                            self._cost_fn,
-                        )
-                        self._sim_accumulator -= dt_ctrl
-                else:
-                    # Ручное управление: физика шагает напрямую.
-                    steps = max(1, int(dt_sec / self._plant._dt))
-                    if keys[pygame.K_LEFT] and not keys[pygame.K_RIGHT]:
-                        manual_force = -force_per_frame
-                    elif keys[pygame.K_RIGHT] and not keys[pygame.K_LEFT]:
-                        manual_force = force_per_frame
-                    else:
-                        manual_force = 0.0
-                    self._F = manual_force
-                    for _ in range(steps):
-                        self._plant.update_physics(self._F, self._noise)
-
-                # Проверка терминального состояния
-                if self._terminate_condition is not None and self._terminate_condition(self._plant):
-                    self._terminated = True
-                    self._elapsed_when_terminated = pygame.time.get_ticks() - self._start_ticks
+            if self._env.controller is not None:
+                self._sim_accumulator += dt_sec
+                dt_ctrl = self._env.controller.dt
+                while self._sim_accumulator >= dt_ctrl:
+                    
+                    measured_s = self._env._get_observation()
+                    target_s = self._env.target_state
+                    action = self._env.controller.action(measured_s,target_s)
+                    obs,r,terminated,truncated,info = self._env.step(action)
+                    self._sim_accumulator -= dt_ctrl
 
             # ── 3. СБРОС ──────────────────────────────────────────────
             if keys[pygame.K_SPACE]:
                 self._reset()
-
+        
             # ── 4. ОТРИСОВКА ────────────────────────────────────────────
-            self._draw(self._F)
+            self._draw(self._env.plant.motor_force)
             self._handle_marker_events()
+            
 
             # ── 5. ЗАПИСЬ ВИДЕО ──────────────────────────────────────
             if self._recording:
                 last_save_acc_ms += dt_ms
                 last_save_acc_ms = self._save_frame_if_recording(last_save_acc_ms)
+            
 
             # Сборка видео после остановки записи
             if not self._recording and self._need_compile and self._record_dir is not None:
                 self._compile_video_dir()
                 self._need_compile = False
+            
 
             self._clock.tick(FPS)
+
+
 
         # ── Выход: сохранение видео ──────────────────────────────────
         if self._record_dir is not None:
@@ -303,10 +274,10 @@ class PendulumViewer:
         self._controller_enabled = not self._controller_enabled
 
         if not self._controller_enabled:
-            self._controller_backup = self._controller
-            if self._controller is not None and hasattr(self._controller, "reset"):
+            self._controller_backup = self._env.controller
+            if self._env.controller is not None and hasattr(self._env.controller, "reset"):
                 try:
-                    self._controller.reset()
+                    self._env.controller.reset()
                 except Exception:
                     pass
             self._controller = None
@@ -382,10 +353,7 @@ class PendulumViewer:
             frames = sorted(glob.glob(os.path.join(self._record_dir, "frame_*.png")))
             n_frames = len(frames)
 
-            if self._elapsed_when_terminated is not None:
-                sim_seconds = self._elapsed_when_terminated / 1000.0
-            else:
-                sim_seconds = (pygame.time.get_ticks() - self._start_ticks) / 1000.0
+            sim_seconds = (pygame.time.get_ticks() - self._start_ticks) / 1000.0
 
             if sim_seconds > 0 and n_frames > 0:
                 return max(1, round(n_frames / sim_seconds))
@@ -402,13 +370,10 @@ class PendulumViewer:
 
     def _reset(self) -> None:
         """Сброс состояния симуляции."""
-        self._plant._q = self._init_q.copy()
-        self._plant._dq = self._init_dq.copy()
-        if self._controller is not None:
-            self._controller.reset()
-        self._terminated = False
+        self._env._plant.reset()
+        if self._env.controller is not None:
+            self._env.controller.reset()
         self._start_ticks = pygame.time.get_ticks()
-        self._elapsed_when_terminated = None
         self._sim_accumulator = 0.0
         self._F = 0.0
         # Очистка буферов графиков
@@ -423,7 +388,7 @@ class PendulumViewer:
         for event in events:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = event.pos
-                cart_x_px = int(WIDTH // 2 + self._plant.q[0] * SCALE)
+                cart_x_px = int(WIDTH // 2 + self._env._plant.q[0] * SCALE)
                 cart_y_px = TRACK_Y - CART_H // 2
                 rect = pygame.Rect(
                     cart_x_px - self._marker_w // 2,
@@ -459,15 +424,15 @@ class PendulumViewer:
 
                     self._marker_x += dx
                     self._last_marker_update_ms = now_ms
-                    self._target[0] = float(self._marker_x)
+                    self._env.target_state[0] = float(self._marker_x)
 
     # ── Отрисовка ─────────────────────────────────────────────────────────
 
     def _draw(self, applied_force: float) -> None:
         """Отрисовка сцены."""
-        q = self._plant.q
-        dq = self._plant.dq
-        is_single = self._plant.single_pendulum_mode
+        q = self._env._plant.q
+        dq = self._env._plant.dq
+        is_single = self._env._plant.single_pendulum_mode
 
         x = q[0]
         th1 = q[1]
@@ -486,15 +451,15 @@ class PendulumViewer:
         draw_pendulums(
             self._screen, cart_x_px, cart_y_px,
             th1, th2, is_single,
-            l1=self._plant._l1, l2=self._plant._l2,
+            l1=self._env._plant._l1, l2=self._env._plant._l2,
         )
         draw_force_arrow(self._screen, applied_force, cart_x_px, cart_y_px)
 
         # HUD
-        mode = "PID" if self._controller is not None else "РУЧНОЕ"
+        mode = "PID" if self._env.controller is not None else "РУЧНОЕ"
         gains_str = ""
-        if self._controller is not None and hasattr(self._controller, "gains"):
-            g = self._controller.gains
+        if self._env.controller is not None and hasattr(self._env.controller, "gains"):
+            g = self._env.controller.gains
             gains_str = f"  Kp={g[0]:.1f}  Ki={g[1]:.1f}  Kd={g[2]:.1f}  Kx={g[3]:.1f}"
 
         lines = [
@@ -513,7 +478,7 @@ class PendulumViewer:
         draw_controller_button(self._screen, self._font, self._controller_enabled)
 
         # Маркер цели
-        if self._controller is not None:
+        if self._env.controller is not None:
             marker_px = int(WIDTH // 2 + self._marker_x * SCALE)
             marker_py = cart_y_px
             mx, my = pygame.mouse.get_pos()
@@ -539,11 +504,6 @@ class PendulumViewer:
         time_surf = self._font.render(f"Время: {elapsed_s:.2f} с", True, GREEN)
         self._screen.blit(time_surf, (WIDTH - 360, 20))
 
-        # Терминальное состояние
-        if self._terminated:
-            term_surf = self._font.render("СИМУЛЯЦИЯ ОСТАНОВЛЕНА (Пробел - рестарт)", True, RED)
-            self._screen.blit(term_surf, (WIDTH // 2 - term_surf.get_width() // 2, HEIGHT // 2))
-
         # ── Графики ─────────────────────────────────────────────────────
         # Текущее время симуляции
         sim_time = self._get_elapsed_time()
@@ -556,7 +516,7 @@ class PendulumViewer:
             self._sin2_history.append(sin_th2)
 
         # Ошибка по X
-        err_x = self._target[0] - x
+        err_x = self._env.target_state[0] - x
         self._err_history.append(err_x)
 
         # Логирование в CSV (полная история)
@@ -584,9 +544,5 @@ class PendulumViewer:
     def _get_elapsed_time(self) -> float:
         """Возвращает прошедшее время симуляции в секундах."""
         if hasattr(self, "_start_ticks"):
-            if self._terminated and self._elapsed_when_terminated is not None:
-                elapsed_ms = self._elapsed_when_terminated
-            else:
-                elapsed_ms = pygame.time.get_ticks() - self._start_ticks
-            return elapsed_ms / 1000.0
+            return (pygame.time.get_ticks() - self._start_ticks) / 1000.0
         return 0.0

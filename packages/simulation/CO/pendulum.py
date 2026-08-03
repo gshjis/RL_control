@@ -190,11 +190,11 @@ class ObjectOfControl:
         self._backslash_mode: bool = config.backslash_mode
 
         # ── Вектор состояния ──────────────────────────────────────────
-        self._q_init: np.ndarray = config.init_q
-        self._dq_init: np.ndarray = config.init_dq
+        self._q_init: np.ndarray = config.init_q.copy()
+        self._dq_init: np.ndarray = config.init_dq.copy()
 
-        self._q: np.ndarray = self._q_init
-        self._dq: np.ndarray = self._dq_init
+        self._q: np.ndarray = self._q_init.copy()
+        self._dq: np.ndarray = self._dq_init.copy()
 
         self._dt: float = config.dt
 
@@ -247,10 +247,26 @@ class ObjectOfControl:
         """Вектор обобщённых координат ``[x, θ₁, θ₂]``."""
         return self._q.copy()
 
+    @q.setter
+    def q(self, value: np.ndarray) -> None:
+        """Установить вектор обобщённых координат ``[x, θ₁, θ₂]``."""
+        value = np.asarray(value, dtype=np.float64)
+        if value.shape != (3,):
+            raise ValueError(f"q должен быть массивом формы (3,), получено {value.shape}")
+        self._q = value
+
     @property
     def dq(self) -> np.ndarray:
         """Вектор обобщённых скоростей ``[ẋ, θ̇₁, θ̇₂]``."""
         return self._dq.copy()
+
+    @dq.setter
+    def dq(self, value: np.ndarray) -> None:
+        """Установить вектор обобщённых скоростей ``[ẋ, θ̇₁, θ̇₂]``."""
+        value = np.asarray(value, dtype=np.float64)
+        if value.shape != (3,):
+            raise ValueError(f"dq должен быть массивом формы (3,), получено {value.shape}")
+        self._dq = value
 
     @property
     def backlash_model(self) -> BacklashModel | None:
@@ -373,8 +389,8 @@ class ObjectOfControl:
         по умолчанию, поэтому это не критично).
         """
         if hasattr(self, "_q_init") and hasattr(self, "_dq_init"):
-            self._q = self._q_init.copy()
-            self._dq = self._dq_init.copy()
+            self.q = self._q_init.copy()
+            self.dq = self._dq_init.copy()
             self._motor_force = 0.0
             self._cpp_backlash_gap_pos = 0.0
             return

@@ -90,16 +90,15 @@ def draw_pendulums(
 
 
 def draw_force_arrow(screen: pygame.Surface, applied_force: float, cart_x_px: int, cart_y_px: int) -> None:
-    if abs(applied_force) > 0.5:
-        arrow_len = float(np.clip(abs(applied_force) * FORCE_SCALE, 10, 150))
-        direction = 1 if applied_force > 0 else -1
-        start_x = cart_x_px
-        end_x = cart_x_px + int(direction * arrow_len)
-        color = GREEN if applied_force > 0 else RED
-        pygame.draw.line(screen, color, (start_x, cart_y_px), (end_x, cart_y_px), 4)
-        tip = 10
-        pygame.draw.line(screen, color, (end_x, cart_y_px), (end_x - direction * tip, cart_y_px - tip // 2), 3)
-        pygame.draw.line(screen, color, (end_x, cart_y_px), (end_x - direction * tip, cart_y_px + tip // 2), 3)
+    arrow_len = float(np.clip(abs(applied_force) * FORCE_SCALE, 10, 150))
+    direction = 1 if applied_force > 0 else -1
+    start_x = cart_x_px
+    end_x = cart_x_px + int(direction * arrow_len)
+    color = GREEN if applied_force > 0 else RED
+    pygame.draw.line(screen, color, (start_x, cart_y_px), (end_x, cart_y_px), 4)
+    tip = 10
+    pygame.draw.line(screen, color, (end_x, cart_y_px), (end_x - direction * tip, cart_y_px - tip // 2), 3)
+    pygame.draw.line(screen, color, (end_x, cart_y_px), (end_x - direction * tip, cart_y_px + tip // 2), 3)
 
 
 def draw_hud(screen: pygame.Surface, font: pygame.font.Font, lines: list[str]) -> None:

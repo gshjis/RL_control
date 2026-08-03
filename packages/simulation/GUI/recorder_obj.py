@@ -9,6 +9,7 @@ from typing import Optional
 from .recorder import compile_video
 
 
+
 class Recorder:
     def __init__(self, record_dir: Optional[str] = None) -> None:
         self.record_dir = record_dir or os.path.abspath(".")

@@ -14,10 +14,6 @@ from packages.simulation.CO.pendulum import ObjectOfControl
 from packages.simulation.CO.sensor import SensorBlock
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# Differentiator
-# ═══════════════════════════════════════════════════════════════════════════
-
 class Differentiator:
     """
     Блок численного дифференцирования с фильтрацией.
@@ -117,10 +113,6 @@ class Differentiator:
         self._filtered_velocity = None
 
 
-# ═══════════════════════════════════════════════════════════════════════════
-# SignalFilter
-# ═══════════════════════════════════════════════════════════════════════════
-
 class SignalFilter:
     """
     Блок экспоненциального сглаживания (ФНЧ первого порядка).
@@ -196,10 +188,6 @@ class SignalFilter:
         """
         self._filtered = None
 
-
-# ═══════════════════════════════════════════════════════════════════════════
-# Controller (Abstract)
-# ═══════════════════════════════════════════════════════════════════════════
 
 class Controller(ABC):
     """
@@ -299,7 +287,6 @@ class Controller(ABC):
             stacklevel=2,
         )
 
-
     @property
     def last_control_action(self) -> float:
         """Последнее вычисленное значение силы (Н)."""
@@ -315,7 +302,12 @@ class Controller(ABC):
         """Блок ФНЧ для сглаживания измерений."""
         return self._signal_filter
 
-    def compute_control(
+    @property
+    def dt(self) -> float:
+        """Такт управления (с)."""
+        return self._dt
+
+    def action(
         self, measured_state: np.ndarray, target_state: np.ndarray
     ) -> float:
         """
@@ -368,7 +360,7 @@ class Controller(ABC):
         s_clean = self._signal_filter.filter_signal(full)
 
         # ── 3. Закон управления (абстрактный) ──────────────────────────
-        F_raw = self.get_action(s_clean, target_state)
+        F_raw = self.get_control(s_clean, target_state)
             # ── 4. Насыщение (clipping) ────────────────────────────────────
         max_f = self._max_force
         if F_raw > max_f:
@@ -382,12 +374,10 @@ class Controller(ABC):
         self._last_control_action = float(F_clipped)
         return self._last_control_action
 
-    # ── Абстрактный метод (закон управления) ──────────────────────────────
-
     @abstractmethod
-    def get_action(
+    def get_control(
         self, s_clean: np.ndarray, target_state: np.ndarray
-    ) -> float:
+    ) -> float: 
         """
         Абстрактный метод вычисления управляющего воздействия.
 
@@ -414,8 +404,6 @@ class Controller(ABC):
         """
         ...
 
-    # ── Сброс ─────────────────────────────────────────────────────────────
-
     def reset(self) -> None:
         """
         Сбросить внутреннюю память фильтра и дифференциатора.
@@ -430,3 +418,4 @@ class Controller(ABC):
         self._differentiator.reset()
         self._signal_filter.reset()
         self._last_control_action = 0.0
+

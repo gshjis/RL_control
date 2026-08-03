@@ -8,6 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 from .constants import WIDTH, HEIGHT, FPS
 
 
+
 def handle_events(screen: pygame.Surface, clock: pygame.time.Clock) -> Dict[str, Any]:
     """Обработать очередь событий pygame и вернуть словарь действий.
 

@@ -6,15 +6,15 @@ from __future__ import annotations
 
 import numpy as np
 
-from packages.controllers.PID import PIDController
+from packages.controllers.PPO import PPOConfig, PPOController
 from packages.simulation.CO import (
     ControllerConfig,
     NoiseForce,
-    ObjectOfControl,
     PlantConfig,
     SensorConfig,
 )
 from packages.simulation.GUI import PendulumViewer
+from packages.simulation.ENV.env import PendulumEnv
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Конфигурация физической модели
@@ -34,8 +34,8 @@ PLANT_CONFIG = PlantConfig(
     backslash_mode=False,
     init_q=np.array([0.0, np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
-    dt=0.001,
-    motor_time_constant=0.1,
+    dt=0.0001,
+    motor_time_constant=0.05,  # инерция двигателя
 )
 
 SENSOR_CONFIG = SensorConfig(
@@ -49,7 +49,7 @@ SENSOR_CONFIG = SensorConfig(
 CONTROLLER_CONFIG = ControllerConfig(
     dt=0.01,
     max_force=24.0,
-    has_velocity_sensors=True,
+    has_velocity_sensors=False,
     filter_cutoff_hz=50.0,
 )
 
@@ -62,21 +62,37 @@ TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
 
 if __name__ == "__main__":
 
-    # ПИД-регулятор (работает сразу, без обучения)
-    controller = PIDController(
-        CONTROLLER_CONFIG,
-        gains=np.array([80.0, 0.0, 30.0, -10.0, -15.0]),
+    # ── PPO ──────────────────────────────────────────────────────────────
+    ppo_config = PPOConfig(
+        total_timesteps=1_000_000,
+        n_steps=1024
     )
 
-    print("Запуск GUI-симуляции...")
-    print("  Управление: ПИД-регулятор")
-    print("  Пробел — сброс, Q / ESC — выход")
-
-    viewer = PendulumViewer(
-        plant=ObjectOfControl(PLANT_CONFIG),
+    ppo_controller = PPOController(
+        ppo_config=ppo_config,
+        controller_config=CONTROLLER_CONFIG,
+        plant_config=PLANT_CONFIG,
         sensor_config=SENSOR_CONFIG,
         noise=NOISE,
         target_state=TARGET,
-        controller=controller,
     )
+
+    print("Обучение PPO...")
+    print(f"  total_timesteps = {ppo_config.total_timesteps}")
+    print("  Пробел — сброс, C — мотор вкл/выкл, Q / ESC — выход")
+    print(f"  Инерция двигателя: τ = {PLANT_CONFIG.motor_time_constant} с")
+
+    ppo_controller.train(
+        plant_config=PLANT_CONFIG,
+        sensor_config=SENSOR_CONFIG,
+        noise=NOISE,
+        target_state=TARGET,
+    )
+    print("Обучение PPO завершено!")
+
+    # ── Запуск GUI с обученным PPO ──────────────────────────────────────
+    env = PendulumEnv(
+        PLANT_CONFIG, SENSOR_CONFIG, ppo_controller, NOISE, TARGET, 8
+    )
+    viewer = PendulumViewer(env=env)
     viewer.use()

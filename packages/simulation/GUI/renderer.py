@@ -9,6 +9,7 @@ from .draw import draw_cart, draw_pendulums, draw_force_arrow, draw_hud, draw_re
 from .constants import WIDTH, HEIGHT, TRACK_Y, CART_H, FPS
 
 
+
 class Renderer:
     def __init__(self, screen: pygame.Surface, font: pygame.font.Font, controller: Any = None) -> None:
         self.screen = screen

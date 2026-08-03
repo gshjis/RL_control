@@ -7,6 +7,7 @@ import subprocess
 from typing import Optional
 
 
+
 def compile_video(record_dir: str, fps: int) -> Optional[str]:
     """Собрать видео из PNG-фреймов с помощью ffmpeg. Возвращает путь к mp4 или None."""
     try:

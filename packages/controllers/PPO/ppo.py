@@ -83,16 +83,19 @@ class PPOController(Controller):
 
     # ── Закон управления (абстрактный метод Controller) ──────────────────
 
-    def get_action(self, s_clean: np.ndarray, target_state: np.ndarray) -> float:
+    def get_control(self, s_clean: np.ndarray, target_state: np.ndarray) -> float:
         """
         Получить действие от обученной PPO-политики.
+
+        Вектор наблюдения для агента формируется как конкатенация
+        текущего состояния и целевого состояния (длина 12).
 
         Parameters
         ----------
         s_clean : np.ndarray
             Отфильтрованный вектор состояния ``(x, θ₁, θ₂, ẋ, θ̇₁, θ̇₂)``.
         target_state : np.ndarray
-            Целевой вектор состояния (не используется — PPO учится без него).
+            Целевой вектор состояния ``(x, θ₁, θ₂, ẋ, θ̇₁, θ̇₂)``.
 
         Returns
         -------
@@ -102,7 +105,9 @@ class PPOController(Controller):
         if self._model is None:
             raise RuntimeError("PPO-модель не загружена. Вызовите train() или load().")
 
-        action, _ = self._model.predict(s_clean, deterministic=True)
+        obs = np.concat([np.asarray(s_clean, dtype=np.float64),
+                         np.asarray(target_state, dtype=np.float64)])
+        action, _ = self._model.predict(obs, deterministic=True)
         return float(action.item())
 
     # ── Обучение ─────────────────────────────────────────────────────────
@@ -133,18 +138,17 @@ class PPOController(Controller):
         Для тонкой настройки используйте ``PPOConfig`` напрямую.
         """
         ppo_cfg = self._ppo_config
-        dt_control = ppo_cfg.dt_control
 
         # ── Фабрика среды ───────────────────────────────────────────────
         def make_env() -> PendulumEnv:
             return PendulumEnv(
                 plant_config=plant_config,
                 sensor_config=sensor_config,
+                controller=self,
                 noise_force=noise,
                 target_state=target_state,
                 max_force=self._max_force,
                 max_episode_steps=ppo_cfg.max_episode_steps,
-                dt_control=dt_control,
             )
 
         vec_env = DummyVecEnv([make_env])

@@ -8,6 +8,7 @@ import numpy as np
 from packages.simulation.CO.datatypes import NoiseForce, PlantConfig, SensorConfig
 from packages.simulation.CO.pendulum import ObjectOfControl
 from packages.simulation.CO.sensor import SensorBlock
+from packages.simulation.CO import Controller
 
 
 class PendulumEnv(gym.Env):
@@ -54,12 +55,12 @@ class PendulumEnv(gym.Env):
         self,
         plant_config: PlantConfig,
         sensor_config: SensorConfig,
+        controller: Controller,
         noise_force: NoiseForce | None = None,
         target_state: np.ndarray | None = None,
         max_force: float = 30.0,
         max_episode_steps: int = 1000, # TODO Заменить на секунды
         reward_function: Callable[[np.ndarray, np.ndarray], float] | None = None,
-        dt_control: float = 0.005,
     ) -> None:
         super().__init__()
 
@@ -73,19 +74,15 @@ class PendulumEnv(gym.Env):
         self._max_force = float(max_force)
         self._max_episode_steps = int(max_episode_steps)
         self._reward_function = reward_function
-        self._dt_control = float(dt_control)
+        self._dt_control = float(controller.dt)
 
-        # ── Компоненты симуляции ────────────────────────────────────────
         self._plant: ObjectOfControl = ObjectOfControl(self._plant_config)
         self._sensor = SensorBlock(self._sensor_config)
+        self._controller = controller
 
-
-        # ── Пространства Gym ────────────────────────────────────────────
-        # Наблюдение: (x, θ₁, θ₂, ẋ, θ̇₁, θ̇₂)
-        high = np.array([np.inf, np.inf, np.inf, np.inf, np.inf, np.inf], dtype=np.float64)
+        high = np.array([np.inf] * 12, dtype=np.float64)
         self.observation_space = gym.spaces.Box(low=-high, high=high, dtype=np.float64)
 
-        # Действие: сила на тележке (Н)
         self.action_space = gym.spaces.Box(
             low=-self._max_force,
             high=self._max_force,
@@ -133,7 +130,7 @@ class PendulumEnv(gym.Env):
         self._prev_force = 0.0
 
         obs = self._get_observation()
-        return obs, {}
+        return np.concat([obs, self._target_state]), {}
 
     def step(
         self, action: np.ndarray | float
@@ -166,28 +163,23 @@ class PendulumEnv(gym.Env):
         if self._plant is None or self._sensor is None:
             raise RuntimeError("Среда не инициализирована. Вызовите reset() перед step().")
 
-        # ── 1. Клиппирование действия ───────────────────────────────────
         if isinstance(action, np.ndarray):
             action = float(action.item())
-
-        # ── 2. Шаг физики ───────────────────────────────────────────────
 
         steps_per_control = int(self._dt_control / self._plant._dt)
         steps_per_control_compute = int(0.2*steps_per_control)             # TODO Добавить в настроки коефициент задержки
         steps_per_control_action = steps_per_control - steps_per_control_compute
-
+        # Вычисления
         for _ in range(steps_per_control_compute):
             self._plant.update_physics(self._prev_force, self._noise_force)
+        
+        # Применение
         for _ in range(steps_per_control_action):
             self._plant.update_physics(action, self._noise_force)
 
-        # ── 3. Телеметрия ───────────────────────────────────────────────
         obs = self._get_observation()
 
-        # ── 4. Награда ──────────────────────────────────────────────────
         reward = self._compute_reward(obs)
-
-        # ── 5. Терминальные условия ─────────────────────────────────────
         self._current_step += 1
         self._prev_force = action
         terminated = self._check_terminated()
@@ -196,9 +188,10 @@ class PendulumEnv(gym.Env):
         info: dict[str, Any] = {
             "step": self._current_step,
             "force": action,
+            "real_new_s":self.plant.q
         }
 
-        return obs, float(reward), terminated, truncated, info
+        return np.concat([obs, self._target_state]), float(reward), terminated, truncated, info
 
     def render(self, mode: str = "human") -> None:
         """
@@ -210,11 +203,6 @@ class PendulumEnv(gym.Env):
             Режим рендеринга (``"human"`` или ``"rgb_array"``).
         """
         pass
-
-    def close(self) -> None:
-        """Освободить ресурсы среды."""
-        self._plant = None
-        self._sensor = None
 
     # ──────────────────────────────────────────────────────────────────────
     # Внутренние методы
@@ -238,52 +226,70 @@ class PendulumEnv(gym.Env):
         Вычислить награду за текущий шаг.
 
         Если задана пользовательская ``reward_function`` — использует её.
-        Иначе — отрицательный квадрат евклидова расстояния до целевого состояния.
+        Иначе — квадратичный штраф за отклонение от целевого состояния.
 
         Parameters
         ----------
         obs : np.ndarray
-            Текущее наблюдение (6,).
+            Текущее наблюдение (12,) — конкатенация ``[state, target]``.
 
         Returns
         -------
         float
             Значение награды.
         """
+        state = obs[:6]
         if self._reward_function is not None:
-            return self._reward_function(self._target_state, obs)
+            return self._reward_function(self._target_state, state)
 
-        # По умолчанию: штраф за отклонение от цели
-        diff = obs - self._target_state
-        return 1
+        # Квадратичный штраф за отклонение от цели
+        error = state - self._target_state
+        # Веса: угол важнее позиции, скорости — меньше
+        w_x = 1.0
+        w_theta = 10.0
+        w_dx = 0.5
+        w_dtheta = 0.5
+        reward = -(
+            w_x * error[0]**2
+            + w_theta * error[1]**2
+            + w_dx * error[3]**2
+            + w_dtheta * error[4]**2
+        )
+        # Бонус за удержание вблизи цели
+        if abs(error[0]) < 0.05 and abs(error[1]) < 0.05:
+            reward += 1.0
+        return float(reward)
 
     def _check_terminated(self) -> bool:
         """
         Проверить, завершён ли эпизод аварийно.
 
-        Условия:
-        - Отклонение маятника от вертикали более чем на 40°
-        - Выход тележки за пределы ``[-3, 3]`` м
+        Условия (относительно ``target_state``):
+        - Отклонение маятника от цели более чем на 40°
+        - Отклонение тележки от цели по x более чем на 2 м
 
         Returns
         -------
         bool
             ``True`` если эпизод должен быть завершён.
         """
-        if self._plant is None:
+        if self.plant is None:
             return False
 
         q = self._plant.q
-        angle = q[1]
-        deviation = abs(angle - np.pi)
-        return deviation > np.radians(40)
+        target = self._target_state
+        x_dev = abs(q[0] - target[0])
+        angle_dev = abs(q[1] - target[1])
+        # Нормализуем угол в [0, π]
+        angle_dev = min(angle_dev, 2.0 * np.pi - angle_dev)
+        return angle_dev > np.radians(40) or x_dev > 2.0
 
     # ──────────────────────────────────────────────────────────────────────
     # Свойства для доступа к внутренним компонентам
     # ──────────────────────────────────────────────────────────────────────
 
     @property
-    def plant(self) -> ObjectOfControl | None:
+    def plant(self) -> ObjectOfControl:
         """Объект управления (физическая модель)."""
         return self._plant
 
@@ -291,6 +297,11 @@ class PendulumEnv(gym.Env):
     def sensor(self) -> SensorBlock | None:
         """Блок сенсоров."""
         return self._sensor
+
+    @property
+    def controller(self) -> Controller:
+        """Контроллер, управляющий средой."""
+        return self._controller
 
     @property
     def target_state(self) -> np.ndarray:

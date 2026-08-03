@@ -5,6 +5,7 @@ from __future__ import annotations
 from packages.simulation.CO import ObjectOfControl, NoiseForce
 
 
+
 class PhysicsRunner:
     """Инкапсулирует логику обновления физики.
 

@@ -10,7 +10,7 @@ class PPOConfig:
 
     # Параметры сети
     policy: str = "MlpPolicy"
-    net_arch: List[int] = field(default_factory=lambda: [64, 64])
+    net_arch: List[int] = field(default_factory=lambda: [128, 128])
 
     # Параметры обучения
     learning_rate: float = 3e-4
@@ -26,4 +26,3 @@ class PPOConfig:
     # Параметры среды
     total_timesteps: int = 500_000
     max_episode_steps: int = 10000
-    dt_control: float = 0.001
