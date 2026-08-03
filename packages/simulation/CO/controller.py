@@ -10,7 +10,6 @@ from packages.simulation.CO.datatypes import (
     ControllerConfig,
     NoiseForce,
 )
-from packages.simulation.CO.engine import MotorInertia
 from packages.simulation.CO.pendulum import ObjectOfControl
 from packages.simulation.CO.sensor import SensorBlock
 
@@ -277,19 +276,28 @@ class Controller(ABC):
 
         # Память
         self._last_control_action: float = 0.0
-        self._motor_inertia: MotorInertia | None = None
 
     def set_motor_inertia(self, time_constant: float) -> None:
         """
         Установить модель инерционности двигателя.
 
+        .. deprecated::
+            Инерционность двигателя перенесена в объект управления
+            (``PlantConfig.motor_time_constant``). Данный метод
+            ничего не делает и сохранён только для обратной совместимости.
+
         Parameters
         ----------
         time_constant : float
-            Постоянная времени апериодического звена (с).
-            ``None`` или ``0.0`` отключает инерционность.
+            Игнорируется. Установите ``motor_time_constant`` в ``PlantConfig``.
         """
-        self._motor_inertia = MotorInertia(time_constant)
+        import warnings
+        warnings.warn(
+            "Motor inertia is now a property of the plant (PlantConfig.motor_time_constant). "
+            "set_motor_inertia() is deprecated and does nothing.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
 
 
     @property
@@ -321,8 +329,7 @@ class Controller(ABC):
            через ``signal_filter.filter_signal()``.
         4. Вызвать абстрактный :meth:`get_action(s_clean, target_state)`.
         5. Ограничить силу диапазоном ``[-max_force, +max_force]``.
-        6. Применить модель инерционности мотора (если задана).
-        7. Сохранить в ``last_control_action`` и вернуть.
+        6. Сохранить в ``last_control_action`` и вернуть.
 
         Parameters
         ----------
@@ -371,13 +378,8 @@ class Controller(ABC):
         else:
             F_clipped = F_raw
 
-        # ── 5. Модель инерционности мотора (опционально) ──────────────
-        output_F: float = F_clipped
-        if self._motor_inertia is not None:
-            output_F = self._motor_inertia.update(F_clipped, self._dt)
-
-        # ── 6. Сохранение и возврат ────────────────────────────────────
-        self._last_control_action = float(output_F)
+        # ── 5. Сохранение и возврат ────────────────────────────────────
+        self._last_control_action = float(F_clipped)
         return self._last_control_action
 
     # ── Абстрактный метод (закон управления) ──────────────────────────────
@@ -416,7 +418,7 @@ class Controller(ABC):
 
     def reset(self) -> None:
         """
-        Сбросить внутреннюю память фильтра, дифференциатора и мотора.
+        Сбросить внутреннюю память фильтра и дифференциатора.
 
         Вызывать в начале каждого нового эпизода, чтобы переходные
         процессы предыдущего запуска не влияли на старт.
@@ -427,6 +429,4 @@ class Controller(ABC):
         """
         self._differentiator.reset()
         self._signal_filter.reset()
-        if self._motor_inertia is not None:
-            self._motor_inertia.reset()
         self._last_control_action = 0.0

@@ -89,6 +89,11 @@ class PlantConfig:
         Ширина зазора редуктора (м).
     backlash_m_mot : float
         Приведённая масса ротора двигателя (кг).
+    motor_time_constant : float
+        Постоянная времени апериодического звена двигателя (с).
+        Моделирует инерционность привода: реальная сила на тележке
+        нарастает экспоненциально с постоянной ``motor_time_constant``.
+        ``0.0`` — мгновенный отклик (инерция отключена).
     init_q : np.ndarray
         Начальные обобщённые координаты ``(x, θ₁, θ₂)``.
     init_dq : np.ndarray
@@ -121,6 +126,7 @@ class PlantConfig:
     backslash_mode: bool = False
     backlash_alpha: float = 0.0
     backlash_m_mot: float = 0.0
+    motor_time_constant: float = 0.0
 
     init_q: np.ndarray = field(default_factory=lambda: np.array([0.0, np.pi, 0.0]))
     init_dq: np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, 0.0]))
@@ -170,6 +176,7 @@ class PlantConfig:
             "backslash_mode": self.backslash_mode,
             "backlash_alpha": self.backlash_alpha,
             "backlash_m_mot": self.backlash_m_mot,
+            "motor_time_constant": self.motor_time_constant,
             "init_q": list(self.init_q),
             "init_dq": list(self.init_dq),
             "dt": self.dt
@@ -198,6 +205,7 @@ class PlantConfig:
             backslash_mode=self.backslash_mode,
             backlash_alpha=self.backlash_alpha,
             backlash_m_mot=self.backlash_m_mot,
+            motor_time_constant=self.motor_time_constant,
             init_q=self.init_q.copy(),
             init_dq=self.init_dq.copy(),
             dt=self.dt,

@@ -51,6 +51,7 @@ struct PlantParams {
     double b_c; /**< Cart viscous friction coefficient. */
     double b_1; /**< First joint viscous friction coefficient. */
     double b_2; /**< Second joint viscous friction coefficient. */
+    double motor_tau; /**< Motor time constant (s). 0 = instant response. */
 };
 
 /**

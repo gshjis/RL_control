@@ -33,19 +33,27 @@ PYBIND11_MODULE(co_cpp, m) {
            bool single_mode,
            double backlash_alpha,
            double backlash_m_mot,
-           double& backlash_gap_pos) {
+           double& backlash_gap_pos,
+           double& motor_force) {
+            // Motor inertia (first-order lag)
+            double F_actual = F_ideal;
+            if (params.motor_tau > 0.0) {
+                F_actual = motor_force + (F_ideal - motor_force) * (dt / params.motor_tau);
+            }
+            motor_force = F_actual;
+
             // Backlash model in C++.
-            double F_real = F_ideal;
+            double F_real = F_actual;
             if (backslash_mode) {
                 const double half_gap = backlash_alpha / 2.0;
-                const double a_rel = F_ideal / backlash_m_mot;
+                const double a_rel = F_actual / backlash_m_mot;
                 backlash_gap_pos += a_rel * dt;
                 if (backlash_gap_pos > half_gap) {
                     backlash_gap_pos = half_gap;
-                    F_real = F_ideal;
+                    F_real = F_actual;
                 } else if (backlash_gap_pos < -half_gap) {
                     backlash_gap_pos = -half_gap;
-                    F_real = F_ideal;
+                    F_real = F_actual;
                 } else {
                     F_real = 0.0;
                 }
@@ -60,10 +68,11 @@ PYBIND11_MODULE(co_cpp, m) {
         },
         py::arg("q"), py::arg("dq"), py::arg("F_ideal"), py::arg("noise"), py::arg("dt"),
         py::arg("params"), py::arg("backslash_mode"), py::arg("single_mode"),
-        py::arg("backlash_alpha"), py::arg("backlash_m_mot"), py::arg("backlash_gap_pos"));
+        py::arg("backlash_alpha"), py::arg("backlash_m_mot"), py::arg("backlash_gap_pos"),
+        py::arg("motor_force"));
 
     // update_physics_cpp: performance-oriented wrapper that updates q/dq in-place
-    // and returns updated backlash_gap_pos.
+    // and returns updated backlash_gap_pos and motor_force.
     // Noise is sampled from normal distribution N(noise_mean, noise_std²).
     m.def(
         "update_physics_cpp",
@@ -78,7 +87,8 @@ PYBIND11_MODULE(co_cpp, m) {
            bool single_mode,
            double backlash_alpha,
            double backlash_m_mot,
-           double backlash_gap_pos) {
+           double backlash_gap_pos,
+           double motor_force) {
             if (q_arr.size() != 3 || dq_arr.size() != 3) {
                 throw std::runtime_error("update_physics_cpp expects q/dq arrays of size 3");
             }
@@ -100,19 +110,26 @@ PYBIND11_MODULE(co_cpp, m) {
             dq.theta1_dot = dq_ptr[1];
             dq.theta2_dot = dq_ptr[2];
 
+            // Motor inertia (first-order lag): F_actual = F_old + (F_ideal - F_old) * (dt / tau)
+            double F_actual = F_ideal;
+            if (params.motor_tau > 0.0) {
+                F_actual = motor_force + (F_ideal - motor_force) * (dt / params.motor_tau);
+            }
+            motor_force = F_actual;
+
             // Backlash (exactly as in rk4_step wrapper)
-            double F_real = F_ideal;
+            double F_real = F_actual;
             double gap_pos = backlash_gap_pos;
             if (backslash_mode) {
                 const double half_gap = backlash_alpha / 2.0;
-                const double a_rel = F_ideal / backlash_m_mot;
+                const double a_rel = F_actual / backlash_m_mot;
                 gap_pos += a_rel * dt;
                 if (gap_pos > half_gap) {
                     gap_pos = half_gap;
-                    F_real = F_ideal;
+                    F_real = F_actual;
                 } else if (gap_pos < -half_gap) {
                     gap_pos = -half_gap;
-                    F_real = F_ideal;
+                    F_real = F_actual;
                 } else {
                     F_real = 0.0;
                 }
@@ -133,18 +150,13 @@ PYBIND11_MODULE(co_cpp, m) {
             dq_ptr[1] = dq.theta1_dot;
             dq_ptr[2] = dq.theta2_dot;
 
-            return py::make_tuple(q_arr, dq_arr, gap_pos);
+            return py::make_tuple(q_arr, dq_arr, gap_pos, motor_force);
         },
         py::arg("q"), py::arg("dq"), py::arg("F_ideal"),
         py::arg("noise_mean"), py::arg("noise_std"), py::arg("dt"),
         py::arg("params"), py::arg("backslash_mode"), py::arg("single_mode"),
         py::arg("backlash_alpha"), py::arg("backlash_m_mot"),
-        py::arg("backlash_gap_pos"));
-
-    // NOTE:
-    // update_physics_cpp будет добавлен позже после уточнения формата доступа к numpy массивам
-    // (нужны includes pybind11/numpy и корректная работа с py::array_t).
-    // Сейчас оставляем только rk4_step, т.к. он уже обновляет q/dq и backlash_gap_pos.
+        py::arg("backlash_gap_pos"), py::arg("motor_force"));
 
     py::class_<State3>(m, "State3")
         .def(py::init<>())
@@ -172,5 +184,6 @@ PYBIND11_MODULE(co_cpp, m) {
         .def_readwrite("g", &PlantParams::g)
         .def_readwrite("b_c", &PlantParams::b_c)
         .def_readwrite("b_1", &PlantParams::b_1)
-        .def_readwrite("b_2", &PlantParams::b_2);
+        .def_readwrite("b_2", &PlantParams::b_2)
+        .def_readwrite("motor_tau", &PlantParams::motor_tau);
 }

@@ -15,7 +15,6 @@ import pygame
 
 from packages.simulation.CO import (
     Controller,
-    MotorInertia,
     NoiseForce,
     ObjectOfControl,
     SensorBlock,
@@ -71,10 +70,6 @@ class PendulumViewer:
         self._target = target_state
         self._terminate_condition = terminate_condition
 
-        # Инерционность двигателя: используется при ручном управлении,
-        # а при автоматическом — обрабатывается внутри compute_control / clock_cycle.
-        # Захардкожена 0.1с, т.к. это значение по умолчанию для set_motor_inertia.
-        self._motor_inertia = MotorInertia(time_constant=0.0)
         self._terminated = False
         self._elapsed_when_terminated: int | None = None
         self._F: float = 0.0  # Текущая сила, применяемая к маятнику
@@ -246,10 +241,7 @@ class PendulumViewer:
                         manual_force = force_per_frame
                     else:
                         manual_force = 0.0
-                    if self._motor_inertia:
-                        self._F = self._motor_inertia.update(manual_force, dt_sec)
-                    else:
-                        self._F = manual_force
+                    self._F = manual_force
                     for _ in range(steps):
                         self._plant.update_physics(self._F, self._noise)
 
@@ -414,8 +406,6 @@ class PendulumViewer:
         self._plant._dq = self._init_dq.copy()
         if self._controller is not None:
             self._controller.reset()
-        if self._motor_inertia is not None:
-            self._motor_inertia.reset()
         self._terminated = False
         self._start_ticks = pygame.time.get_ticks()
         self._elapsed_when_terminated = None

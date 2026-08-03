@@ -206,6 +206,10 @@ class ObjectOfControl:
         else:
             self._backlash: BacklashModel | None = None
 
+        # ── Модель инерционности двигателя ────────────────────────────
+        self._motor_tau: float = float(config.motor_time_constant)
+        self._motor_force: float = 0.0
+
         # C++ backend state (gap position)
         self._cpp_backlash_gap_pos: float = 0.0
 
@@ -232,6 +236,7 @@ class ObjectOfControl:
             self._cpp_params.b_c = self._b_c
             self._cpp_params.b_1 = self._b_1
             self._cpp_params.b_2 = self._b_2
+            self._cpp_params.motor_tau = self._motor_tau
 
     # ──────────────────────────────────────────────────────────────────────
     # Свойства
@@ -251,6 +256,18 @@ class ObjectOfControl:
     def backlash_model(self) -> BacklashModel | None:
         """Объект модели люфта (``None``, если люфт не учитывается)."""
         return self._backlash
+
+    @property
+    def motor_tau(self) -> float:
+        """Постоянная времени двигателя (с). ``0.0`` — мгновенный отклик."""
+        return self._motor_tau
+
+    @property
+    def motor_force(self) -> float:
+        """
+        Текущее реальное усилие на тележке с учётом инерции двигателя (Н).
+        """
+        return self._motor_force
 
     @property
     def single_pendulum_mode(self) -> bool:
@@ -273,11 +290,13 @@ class ObjectOfControl:
 
         Алгоритм:
 
-        1. Если ``backslash_mode`` включён — передать ``F_ideal``
+        1. Если ``motor_time_constant > 0`` — применить модель
+           инерционности двигателя (апериодическое звено первого порядка).
+        2. Если ``backslash_mode`` включён — передать ``F_actual``
            и скорость тележки в модель люфта для получения ``F_real``.
-           Иначе ``F_real = F_ideal``.
-        2. Сформировать суммарную силу: ``F_total = F_real + F_noise.value``.
-        3. Выполнить один шаг RK4 с силой ``F_total``.
+           Иначе ``F_real = F_actual``.
+        3. Сформировать суммарную силу: ``F_total = F_real + F_noise.value``.
+        4. Выполнить один шаг RK4 с силой ``F_total``.
 
         Parameters
         ----------
@@ -323,19 +342,22 @@ class ObjectOfControl:
                 else 1.0
             )
 
-            _co_cpp.update_physics_cpp(
-                q_arr,
-                dq_arr,
-                float(F_ideal),
-                float(F_noise.mean),
-                float(F_noise.std),
-                float(self._dt),
-                self._cpp_params,
-                bool(self._backslash_mode),
-                bool(self._single_mode),
-                backlash_alpha,
-                backlash_m_mot,
-                float(self._cpp_backlash_gap_pos),
+            q_arr, dq_arr, self._cpp_backlash_gap_pos, self._motor_force = (
+                _co_cpp.update_physics_cpp(
+                    q_arr,
+                    dq_arr,
+                    float(F_ideal),
+                    float(F_noise.mean),
+                    float(F_noise.std),
+                    float(self._dt),
+                    self._cpp_params,
+                    bool(self._backslash_mode),
+                    bool(self._single_mode),
+                    backlash_alpha,
+                    backlash_m_mot,
+                    float(self._cpp_backlash_gap_pos),
+                    float(self._motor_force),
+                )
             )
 
     def reset(self) -> None:
@@ -353,10 +375,13 @@ class ObjectOfControl:
         if hasattr(self, "_q_init") and hasattr(self, "_dq_init"):
             self._q = self._q_init.copy()
             self._dq = self._dq_init.copy()
+            self._motor_force = 0.0
+            self._cpp_backlash_gap_pos = 0.0
             return
 
         # Fallback: обнуляем скорости, координаты оставляем как есть.
         self._dq = np.array([0.0, 0.0, 0.0])
+        self._motor_force = 0.0
 
     def get_clean_state(self) -> tuple[np.ndarray, np.ndarray]:
         """

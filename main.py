@@ -1,14 +1,12 @@
 """
-Основной скрипт: обучение PPO-контроллера и запуск GUI-симуляции.
+Основной скрипт: запуск симуляции перевёрнутого маятника с GUI.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import numpy as np
 
-from packages.controllers.PPO import PPOConfig, PPOController
+from packages.controllers.PID import PIDController
 from packages.simulation.CO import (
     ControllerConfig,
     NoiseForce,
@@ -26,8 +24,8 @@ PLANT_CONFIG = PlantConfig(
     M=1.0,
     m1=0.1,
     l1=0.3,
-    m2=0.1,
-    l2=0.3,
+    m2=0.0,
+    l2=0.0,
     g=-9.81,
     b_c=0.1,
     b_1=0.003,
@@ -36,7 +34,8 @@ PLANT_CONFIG = PlantConfig(
     backslash_mode=False,
     init_q=np.array([0.0, np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
-    dt=0.0001,
+    dt=0.001,
+    motor_time_constant=0.1,
 )
 
 SENSOR_CONFIG = SensorConfig(
@@ -48,23 +47,14 @@ SENSOR_CONFIG = SensorConfig(
 )
 
 CONTROLLER_CONFIG = ControllerConfig(
-    dt=0.001,
+    dt=0.01,
     max_force=24.0,
-    has_velocity_sensors=False,
+    has_velocity_sensors=True,
     filter_cutoff_hz=50.0,
-)
-
-PPO_CFG = PPOConfig(
-    total_timesteps=500_000,
-    max_episode_steps=10000,
-    dt_control=0.001,
 )
 
 NOISE = NoiseForce(mean=0.00, std=0.03)
 TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
-
-MODEL_PATH = Path("models") / "ppo_controller.zip"
-
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Точка входа
@@ -72,42 +62,16 @@ MODEL_PATH = Path("models") / "ppo_controller.zip"
 
 if __name__ == "__main__":
 
-    # ── Создание контроллера ────────────────────────────────────────────
-    controller = PPOController(
-        ppo_config=PPO_CFG,
-        controller_config=CONTROLLER_CONFIG,
-        plant_config=PLANT_CONFIG,
-        sensor_config=SENSOR_CONFIG,
-        noise=NOISE,
-        target_state=TARGET,
+    # ПИД-регулятор (работает сразу, без обучения)
+    controller = PIDController(
+        CONTROLLER_CONFIG,
+        gains=np.array([80.0, 0.0, 30.0, -10.0, -15.0]),
     )
 
-    # ── Обучение или загрузка ───────────────────────────────────────────
-    if MODEL_PATH.exists():
-        print(f"Загрузка предобученной модели: {MODEL_PATH}")
-        controller = PPOController.from_pretrained(
-            path=MODEL_PATH,
-            ppo_config=PPO_CFG,
-            controller_config=CONTROLLER_CONFIG,
-            plant_config=PLANT_CONFIG,
-            sensor_config=SENSOR_CONFIG,
-            noise=NOISE,
-            target_state=TARGET,
-        )
-    else:
-        print("Обучение PPO-контроллера...")
-        controller.train(
-            plant_config=PLANT_CONFIG,
-            sensor_config=SENSOR_CONFIG,
-            noise=NOISE,
-            target_state=TARGET,
-        )
-        MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
-        controller.save(MODEL_PATH)
-        print(f"Модель сохранена: {MODEL_PATH}")
-
-    # ── Запуск GUI ──────────────────────────────────────────────────────
     print("Запуск GUI-симуляции...")
+    print("  Управление: ПИД-регулятор")
+    print("  Пробел — сброс, Q / ESC — выход")
+
     viewer = PendulumViewer(
         plant=ObjectOfControl(PLANT_CONFIG),
         sensor_config=SENSOR_CONFIG,
