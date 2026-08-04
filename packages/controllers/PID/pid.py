@@ -1,18 +1,19 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
-import cost_functions as cost_f
-from loggers import Logger
+from collections.abc import Callable
+from typing import Any, Optional
+
 import numpy as np
+from loggers import Logger
 from numpy.typing import NDArray
+
 from packages.simulation.CO import (
     Controller,
     ControllerConfig,
+    NoiseForce,
     ObjectOfControl,
     PlantConfig,
-    SensorBlock,
     SensorConfig,
-    NoiseForce
 )
 from packages.simulation.ENV.env import PendulumEnv
 

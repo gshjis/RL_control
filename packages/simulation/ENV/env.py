@@ -61,6 +61,8 @@ class PendulumEnv(gym.Env):
         max_force: float = 30.0,
         max_episode_steps: int = 1000, # TODO Заменить на секунды
         reward_function: Callable[[np.ndarray, np.ndarray], float] | None = None,
+        proximity_bonus: float = 1.0,
+        time_bonus: float = 0.0,
     ) -> None:
         super().__init__()
 
@@ -74,6 +76,8 @@ class PendulumEnv(gym.Env):
         self._max_force = float(max_force)
         self._max_episode_steps = int(max_episode_steps)
         self._reward_function = reward_function
+        self._proximity_bonus = float(proximity_bonus)
+        self._time_bonus = float(time_bonus)
         self._dt_control = float(controller.dt)
 
         self._plant: ObjectOfControl = ObjectOfControl(self._plant_config)
@@ -125,11 +129,15 @@ class PendulumEnv(gym.Env):
 
         # Пересоздаём объекты симуляции
         self._plant.reset()
+        if self._controller is not None:
+            self._controller.signal_filter.reset()
 
         self._current_step = 0
         self._prev_force = 0.0
 
         obs = self._get_observation()
+        if self._controller is not None:
+            obs = self._controller.signal_filter.filter_signal(obs)
         return np.concat([obs, self._target_state]), {}
 
     def step(
@@ -178,6 +186,8 @@ class PendulumEnv(gym.Env):
             self._plant.update_physics(action, self._noise_force)
 
         obs = self._get_observation()
+        if self._controller is not None:
+            obs = self._controller.signal_filter.filter_signal(obs)
 
         reward = self._compute_reward(obs)
         self._current_step += 1
@@ -244,9 +254,26 @@ class PendulumEnv(gym.Env):
         if self._reward_function is not None:
             return self._reward_function(self._target_state, state)
 
-        # По умолчанию: отрицательная сумма квадратов разниц
         error = state - self._target_state
-        return float(-np.dot(error, error))
+        w_x = 1.0
+        w_theta = 1.0
+        w_dx = 1
+        w_dtheta = 1
+        reward = -(
+            w_x * error[0] ** 2
+            + w_theta * error[1] ** 2
+            + w_dx * error[3] ** 2
+            + w_dtheta * error[4] ** 2
+        )
+
+        # Бонус за близость к цели (удержание вблизи)
+        if abs(error[0]) < 0.05 and abs(error[1]) < 0.05:
+            reward += self._proximity_bonus
+
+        # Бонус за время (поощряет удержание дольше, опционально)
+        reward += self._time_bonus
+
+        return float(reward)
 
     def _check_terminated(self) -> bool:
         """

@@ -10,7 +10,7 @@ class PPOConfig:
 
     # Параметры сети
     policy: str = "MlpPolicy"
-    net_arch: List[int] = field(default_factory=lambda: [64, 64, 64])
+    net_arch: List[int] = field(default_factory=lambda: [64,64])
 
     # Параметры обучения
     learning_rate: float = 3e-4

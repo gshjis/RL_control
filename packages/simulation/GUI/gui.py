@@ -3,22 +3,14 @@ Pygame-визуализация перевёрнутого маятника.
 """
 
 from __future__ import annotations
-import csv
+
 import os
 import sys
 from collections import deque
-from typing import Callable
 
 import numpy as np
 import pygame
 
-from packages.simulation.CO import (
-    Controller,
-    NoiseForce,
-    ObjectOfControl,
-    SensorBlock,
-    SensorConfig,
-)
 from packages.simulation.ENV.env import PendulumEnv
 
 from .constants import *
@@ -109,6 +101,9 @@ class PendulumViewer:
         # и вызываем env.step(), пока накопление >= controller._dt.
         self._sim_accumulator: float = 0.0
 
+        # Последнее observation (отфильтрованное) для get_control()
+        self._obs: np.ndarray | None = None
+
         # Буферы для графиков (deque — для отрисовки, ограниченный размер)
         self._sin1_history: deque[float] = deque(maxlen=800)
         self._sin2_history: deque[float] = deque(maxlen=800)
@@ -151,8 +146,8 @@ class PendulumViewer:
             actions = self._event_controller.poll()
             
 
-            # Стрелки для перемещения цели
-            if self._env._controller is not None:
+            # Стрелки для перемещения цели (только при включённом контроллере)
+            if self._controller is not None:
                 keys = pygame.key.get_pressed()
                 changed = False
                 if keys[pygame.K_LEFT]:
@@ -208,16 +203,31 @@ class PendulumViewer:
             if self._controller is not None:
                 self._sim_accumulator += dt_sec
                 dt_ctrl = self._controller.dt
+                # Инициализация obs (первый шаг) — отфильтрованное
+                if self._obs is None:
+                    self._obs, _ = self._env.reset()
                 while self._sim_accumulator >= dt_ctrl:
-                    measured_s = self._env._get_observation()
                     target_s = self._env.target_state
-                    action = self._controller.action(measured_s, target_s)
-                    obs, r, terminated, truncated, info = self._env.step(action)
+                    # get_control() получает отфильтрованное состояние (без двойной фильтрации)
+                    action = self._controller.get_control(self._obs[:6], target_s)
+                    self._obs, r, terminated, truncated, info = self._env.step(action)
                     self._sim_accumulator -= dt_ctrl
                     # Автоматический сброс при завершении эпизода
                     if terminated or truncated:
                         self._reset()
                         break
+            else:
+                # ── Ручное управление (контроллер отключён) ──────────
+                self._sim_accumulator += dt_sec
+                dt_ctrl = self._env.controller.dt if self._env.controller is not None else 0.01
+                while self._sim_accumulator >= dt_ctrl:
+                    # Клавиши: ←/→ — сила влево/вправо (инкрементально)
+                    if keys[pygame.K_LEFT]:
+                        manual_force -= force_per_frame
+                    if keys[pygame.K_RIGHT]:
+                        manual_force += force_per_frame
+                    self._env.step(manual_force)
+                    self._sim_accumulator -= dt_ctrl
 
             # ── 3. СБРОС ──────────────────────────────────────────────
             if keys[pygame.K_SPACE]:
@@ -379,6 +389,7 @@ class PendulumViewer:
         self._start_ticks = pygame.time.get_ticks()
         self._sim_accumulator = 0.0
         self._F = 0.0
+        self._obs = None
         # Очистка буферов графиков
         self._sin1_history.clear()
         self._sin2_history.clear()

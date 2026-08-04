@@ -17,20 +17,20 @@ from packages.simulation.ENV.env import PendulumEnv
 from packages.simulation.GUI import PendulumViewer
 
 PLANT_CONFIG = PlantConfig(
-    M=1.0,
-    m1=0.1,
-    l1=0.3,
+    M=1.0,        
+    m1=0.1,       
+    l1=0.3,       
     m2=0.0,
     l2=0.0,
-    g=-9.81,
-    b_c=0.1,
-    b_1=0.003,
-    b_2=0.003,
+    g=-1.81,       
+    b_c=0.01,     
+    b_1=0.001,    
+    b_2=0.001,
     single_pendulum_mode=True,
     backslash_mode=False,
-    init_q=np.array([0.0, np.pi, 0.0]),
+    init_q=np.array([-1.0, np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
-    dt=0.0001,
+    dt=0.002,
     motor_time_constant=0.05
 )
 
@@ -54,10 +54,9 @@ TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
 
 if __name__ == "__main__":
 
-    # ── PPO ──────────────────────────────────────────────────────────────
     ppo_config = PPOConfig(
-        total_timesteps=1_000_000,
-        n_steps=1024
+        total_timesteps=200_000,
+        n_steps=2048
     )
 
     ppo_controller = PPOController(

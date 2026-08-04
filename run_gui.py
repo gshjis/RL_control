@@ -23,21 +23,21 @@ from packages.simulation.GUI import PendulumViewer
 
 # ── Конфигурация (та же, что в main.py) ────────────────────────────────
 PLANT_CONFIG = PlantConfig(
-    M=1.0,
-    m1=0.1,
-    l1=0.3,
+    M=1.0,        
+    m1=0.1,       
+    l1=0.3,       
     m2=0.0,
     l2=0.0,
-    g=-9.81,
-    b_c=0.1,
-    b_1=0.003,
-    b_2=0.003,
+    g=-9.81,       
+    b_c=0.01,     
+    b_1=0.001,    
+    b_2=0.001,
     single_pendulum_mode=True,
     backslash_mode=False,
     init_q=np.array([0.0, np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
-    dt=0.0001,
-    motor_time_constant=0.05,
+    dt=0.002,
+    motor_time_constant=0.05
 )
 
 SENSOR_CONFIG = SensorConfig(
@@ -59,7 +59,7 @@ NOISE = NoiseForce(mean=0.00, std=0.03)
 TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
 
 # Приоритет: final_model (с VecNormalize) → best_model
-MODEL_PATH = "checkpoints/ppo/final_model.zip"
+MODEL_PATH = "checkpoints/ppo/best/best_model.zip"
 if not Path(MODEL_PATH).exists():
     MODEL_PATH = "checkpoints/ppo/best/best_model.zip"
 

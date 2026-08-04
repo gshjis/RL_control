@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pickle
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -76,29 +77,6 @@ class PPOController(Controller):
         self._vec_normalize: VecNormalize | None = None
 
     # ── Закон управления (абстрактный метод Controller) ──────────────────
-
-    def action(self, measured_state: np.ndarray, target_state: np.ndarray) -> float:
-        """
-        Получить действие от обученной PPO-политики.
-
-        PPO получает **сырое** состояние (без фильтрации), как при обучении.
-        Переопределяет Template Method ``Controller.action()``, который
-        фильтрует состояние — для нейросети это не нужно (она сама учится
-        обрабатывать шум датчиков).
-
-        Parameters
-        ----------
-        measured_state : np.ndarray
-            Сырое (зашумлённое/квантованное) состояние с датчиков (6,).
-        target_state : np.ndarray
-            Целевой вектор состояния (6,).
-
-        Returns
-        -------
-        float
-            Управляющая сила (Н).
-        """
-        return self.get_control(measured_state, target_state)
 
     def get_control(self, s_clean: np.ndarray, target_state: np.ndarray) -> float:
         """
@@ -294,7 +272,8 @@ class PPOController(Controller):
         )
         vn_path = str(path) + "_vecnormalize.pkl"
         if Path(vn_path).exists():
-            instance._vec_normalize = VecNormalize.load(vn_path, venv=None)  # type: ignore[arg-type]
+            with open(vn_path, "rb") as f:
+                instance._vec_normalize = pickle.load(f)
         return instance
 
     def load(self, path: str | Path) -> None:
@@ -312,7 +291,8 @@ class PPOController(Controller):
         self._model = SB3_PPO.load(str(path))
         vn_path = str(path) + "_vecnormalize.pkl"
         if Path(vn_path).exists():
-            self._vec_normalize = VecNormalize.load(vn_path, venv=None)  # type: ignore[arg-type]
+            with open(vn_path, "rb") as f:
+                self._vec_normalize = pickle.load(f)
 
     # ── Сброс ───────────────────────────────────────────────────────────
 
