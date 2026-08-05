@@ -2,7 +2,13 @@ from __future__ import annotations
 
 import numpy as np
 from stable_baselines3 import PPO as SB3_PPO
-from stable_baselines3.common.vec_env import VecNormalize
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.vec_env import (
+    DummyVecEnv,
+    VecEnv,
+    VecNormalize,
+    sync_envs_normalization,
+)
 
 from packages.controllers.PPO.mode_config import PPOConfig
 from packages.simulation.CO import (
@@ -41,11 +47,12 @@ class PPOController(Controller):
     def train(
         self, env_orchestrator: EnvOrchestrator,
         ) -> None:
-        vec_env = env_orchestrator._env_hub 
+        vec_env = VecNormalize(env_orchestrator._env_hub, norm_obs=True, norm_reward=False)
+        self._vec_normalize = vec_env
         if self._model is None:
             self._model = SB3_PPO(
                 "MlpPolicy",
-                vec_env,
+                self._vec_normalize,
                 learning_rate=self._ppo_config.learning_rate,
                 n_steps=self._ppo_config.n_steps,
                 batch_size=self._ppo_config.batch_size,
@@ -54,12 +61,14 @@ class PPOController(Controller):
                 verbose=1,
                 seed=self._ppo_config.seed,
             )
-        
-        # 3. Обучить
-        self._model.learn(total_timesteps=self._ppo_config.total_timesteps)
-        
-        # 4. Сохранить нормализацию (если используется VecNormalize)
-        # self._vec_normalize = vec_env
 
-
-        
+        # Валидационная среда (отдельная, обёрнутая в VecNormalize).
+        eval_env = VecNormalize(
+            DummyVecEnv([env_orchestrator._make_env]),
+            norm_obs=True,
+            norm_reward=False,
+        )
+        # Обучить
+        self._model.learn(
+            total_timesteps=self._ppo_config.total_timesteps,
+        )

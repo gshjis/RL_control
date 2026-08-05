@@ -14,7 +14,7 @@ class EnvOrchestrator:
         plant_config,
         sensor_config,
         cost_function,
-        terminate_condition:Callable[[np.ndarray, np.ndarray], bool],
+        terminate_condition:Callable[[np.ndarray], bool],
         n_simulations: int,
         controller_config:ControllerConfig,
         target: Callable[[float], np.ndarray]

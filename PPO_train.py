@@ -15,12 +15,12 @@ if __name__ == "__main__":
         controller_config=CONTROLLER_CONFIG,
     )
 
-    def terminate_condition(s, s_t) -> bool:
-        return bool(abs(s[0] - s_t[0]) > 0.5 or abs(s[1] - s_t[0]) > 0.26)
+    def terminate_condition(e) -> bool:
+        return bool(abs(e[1]) > 0.2)
 
-    def cost_f(s, s_t)->float:
-        diff = s_t - s
-        return np.dot(diff, diff).item()
+    def cost_f(error) -> float:
+
+        return 1
 
     env_orcestrator = env_orcestrator.EnvOrchestrator(
         PLANT_CONFIG,

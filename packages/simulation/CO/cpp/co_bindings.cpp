@@ -36,14 +36,17 @@ PYBIND11_MODULE(co_cpp, m) {
     // ── Sensor block (full C++ implementation) ─────────────────────────────
     py::class_<co::SensorBlock>(m, "SensorBlock")
         .def(py::init<double, int, int, std::vector<double>, std::vector<double>,
-                      int, int>(),
+                      int, int, double, double, double>(),
              py::arg("cart_resolution"),
              py::arg("encoder_resolution_1"),
              py::arg("encoder_resolution_2"),
              py::arg("noise_std_q"),
              py::arg("noise_std_dq"),
              py::arg("seed"),
-             py::arg("pool_size"))
+             py::arg("pool_size"),
+             py::arg("dt"),
+             py::arg("differentiator_cutoff_hz"),
+             py::arg("filter_cutoff_hz"))
         .def("get_telemetry", &co::SensorBlock::get_telemetry)
         .def("reset", &co::SensorBlock::reset);
 

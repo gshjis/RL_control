@@ -18,7 +18,7 @@ class PendulumEnv(gym.Env):
         plant_config,
         sensor_config,
         cost_function,
-        terminate_condition:Callable[[np.ndarray, np.ndarray], bool],
+        terminate_condition:Callable[[np.ndarray], bool],
         controller_config:ControllerConfig,
         target: Callable[[float], np.ndarray]
     ) -> None:
@@ -33,7 +33,7 @@ class PendulumEnv(gym.Env):
         self._old_action: float = 0
 
         self._cost_function:Callable = cost_function
-        self._terminate_condition:Callable[[np.ndarray, np.ndarray], bool] = terminate_condition
+        self._terminate_condition:Callable[[np.ndarray], bool] = terminate_condition
 
         self._controller_dt = controller_config.dt
 
@@ -59,6 +59,7 @@ class PendulumEnv(gym.Env):
  
         super().reset()
         self._t = 0
+
         self._plant.reset()
         r = np.concatenate(self._plant.get_clean_state())
         return (r,{})
@@ -80,12 +81,12 @@ class PendulumEnv(gym.Env):
         # вычислить награду
         observation = self._plant.get_telemetry()
         target_t = self._target(self._t)
-        reward = self._cost_function(observation, target_t)
+        reward = self._cost_function(observation-target_t)
 
         # проверить на терминальность
-        terminate_flag = self._terminate_condition(observation, target_t)
+        terminate_flag = self._terminate_condition(observation-target_t,)
 
         self._t += self._controller_dt
         # вернуть значения  
-        return observation, reward, terminate_flag, False, {}
+        return observation-target_t, reward, terminate_flag, False, {}
     

@@ -62,6 +62,9 @@ class ObjectOfControl:
             list(sensor_config.noise_std_dq),
             int(sensor_config.seed if sensor_config.seed is not None else 0),
             int(sensor_config.noise_pool_size),
+            self._dt,
+            float(sensor_config.differentiator_cutoff_hz or 0.0),
+            float(sensor_config.filter_cutoff_hz),
         )
 
     @property

@@ -117,6 +117,9 @@ class SensorConfig:
     seed: int | None = None
     noise_pool_size: int = 2_000_000
 
+    differentiator_cutoff_hz: float | None = None
+    filter_cutoff_hz: float = 50.0
+
     def to_dict(self) -> dict:
         return {
             "encoder_resolution_1": self.encoder_resolution_1,
@@ -126,6 +129,8 @@ class SensorConfig:
             "noise_std_dq": list(self.noise_std_dq),
             "seed": self.seed,
             "noise_pool_size": self.noise_pool_size,
+            "differentiator_cutoff_hz": self.differentiator_cutoff_hz,
+            "filter_cutoff_hz": self.filter_cutoff_hz,
         }
 
 

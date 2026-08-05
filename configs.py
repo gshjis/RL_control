@@ -9,7 +9,7 @@ from packages.simulation.CO import (
 )
 
 ppo_config = PPOConfig(
-    total_timesteps=200_000,
+    total_timesteps=500_000,
     n_steps=2048
 )
 PLANT_CONFIG = PlantConfig(
@@ -18,12 +18,12 @@ PLANT_CONFIG = PlantConfig(
     l1=0.3,       
     m2=0.0,
     l2=0.0,
-    g=-1.81,       
+    g=-9.81,       
     b_c=0.01,     
     b_1=0.001,    
     b_2=0.001,
     single_pendulum_mode=True,
-    init_q=np.array([-1.0, np.pi, 0.0]),
+    init_q=np.array([0.0, np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
     dt=0.002,
     motor_time_constant=0.05
@@ -46,4 +46,4 @@ CONTROLLER_CONFIG = ControllerConfig(
 
 NOISE = NoiseForce(mean=0.00, std=0.03)
 def target(time:float) -> np.ndarray:
-    return np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
+    return np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
