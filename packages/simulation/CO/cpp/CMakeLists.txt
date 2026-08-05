@@ -26,6 +26,8 @@ include_directories(${Python_INCLUDE_DIRS})
 set(SRC
   co_bindings.cpp
   co_physics.cpp
+  co_signal.cpp
+  co_sensor.cpp
 )
 
 add_library(co_cpp_ext MODULE ${SRC})

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import List
 
 
 @dataclass
@@ -10,7 +9,7 @@ class PPOConfig:
 
     # Параметры сети
     policy: str = "MlpPolicy"
-    net_arch: List[int] = field(default_factory=lambda: [64,64])
+    net_arch: list[int] = field(default_factory=lambda: [64,64])
 
     # Параметры обучения
     learning_rate: float = 3e-4
@@ -26,3 +25,4 @@ class PPOConfig:
     # Параметры среды
     total_timesteps: int = 500_000
     max_episode_steps: int = 10000
+    seed:int = 42

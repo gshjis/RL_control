@@ -10,7 +10,6 @@ from loggers import Logger
 from packages.controllers.PID.pid import PIDController, terminate_condition
 from packages.simulation.CO.datatypes import NoiseForce
 from packages.simulation.CO.pendulum import ObjectOfControl
-from packages.simulation.CO.sensor import SensorBlock
 from packages.simulation.ENV.env import PendulumEnv
 
 

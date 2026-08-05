@@ -3,6 +3,8 @@
 #include <pybind11/numpy.h>
 
 #include "co_physics.hpp"
+#include "co_sensor.hpp"
+#include "co_signal.hpp"
 
 namespace py = pybind11;
 
@@ -20,6 +22,31 @@ PYBIND11_MODULE(co_cpp, m) {
         .def_readwrite("std", &NoiseForceCPP::std)
         .def("get_force", &sample_noise_force);
 
+    // ── Signal processing (full C++ implementations) ──────────────────────
+    py::class_<co::Differentiator>(m, "Differentiator")
+        .def(py::init<double, double>(), py::arg("dt"), py::arg("cutoff_hz") = 0.0)
+        .def("calculate_velocity", &co::Differentiator::calculate_velocity)
+        .def("reset", &co::Differentiator::reset);
+
+    py::class_<co::SignalFilter>(m, "SignalFilter")
+        .def(py::init<double, double>(), py::arg("cutoff_hz"), py::arg("dt"))
+        .def("filter_signal", &co::SignalFilter::filter_signal)
+        .def("reset", &co::SignalFilter::reset);
+
+    // ── Sensor block (full C++ implementation) ─────────────────────────────
+    py::class_<co::SensorBlock>(m, "SensorBlock")
+        .def(py::init<double, int, int, std::vector<double>, std::vector<double>,
+                      int, int>(),
+             py::arg("cart_resolution"),
+             py::arg("encoder_resolution_1"),
+             py::arg("encoder_resolution_2"),
+             py::arg("noise_std_q"),
+             py::arg("noise_std_dq"),
+             py::arg("seed"),
+             py::arg("pool_size"))
+        .def("get_telemetry", &co::SensorBlock::get_telemetry)
+        .def("reset", &co::SensorBlock::reset);
+
     // Main step function: updates q/dq using RK4.
     // This mirrors ObjectOfControl.update_physics(F_ideal, noise).
     m.def(
@@ -29,11 +56,7 @@ PYBIND11_MODULE(co_cpp, m) {
            NoiseForceCPP noise,
            double dt,
            PlantParams params,
-           bool backslash_mode,
            bool single_mode,
-           double backlash_alpha,
-           double backlash_m_mot,
-           double& backlash_gap_pos,
            double& motor_force) {
             // Motor inertia (first-order lag)
             double F_actual = F_ideal;
@@ -42,37 +65,25 @@ PYBIND11_MODULE(co_cpp, m) {
             }
             motor_force = F_actual;
 
-            // Backlash model in C++.
-            double F_real = F_actual;
-            if (backslash_mode) {
-                const double half_gap = backlash_alpha / 2.0;
-                const double a_rel = F_actual / backlash_m_mot;
-                backlash_gap_pos += a_rel * dt;
-                if (backlash_gap_pos > half_gap) {
-                    backlash_gap_pos = half_gap;
-                    F_real = F_actual;
-                } else if (backlash_gap_pos < -half_gap) {
-                    backlash_gap_pos = -half_gap;
-                    F_real = F_actual;
-                } else {
-                    F_real = 0.0;
-                }
-            }
-
             // Sample noise from normal distribution N(noise.mean, noise.std²)
             const double F_noise = sample_noise_force(noise);
-            const double F_total = F_real + F_noise;
+            const double F_total = F_actual + F_noise;
 
             rk4_step(q, dq, F_total, dt, params, single_mode);
             return py::make_tuple(q, dq);
         },
         py::arg("q"), py::arg("dq"), py::arg("F_ideal"), py::arg("noise"), py::arg("dt"),
-        py::arg("params"), py::arg("backslash_mode"), py::arg("single_mode"),
-        py::arg("backlash_alpha"), py::arg("backlash_m_mot"), py::arg("backlash_gap_pos"),
-        py::arg("motor_force"));
+        py::arg("params"), py::arg("single_mode"), py::arg("motor_force"));
 
-    // update_physics_cpp: performance-oriented wrapper that updates q/dq in-place
-    // and returns updated backlash_gap_pos and motor_force.
+    // update_physics_cpp: performance-oriented multi-step wrapper that updates
+    // q/dq in-place and returns the updated motor_force.
+    //
+    // The applied force F_ideal is held constant and the physics is advanced
+    // `n_updates` times (substeps), each of duration `dt`. Motor inertia and
+    // noise are re-evaluated on every substep so the effect of the force is
+    // correctly accumulated. When `n_updates == 1` the behaviour is identical
+    // to the original single-step call.
+    //
     // Noise is sampled from normal distribution N(noise_mean, noise_std²).
     m.def(
         "update_physics_cpp",
@@ -83,14 +94,14 @@ PYBIND11_MODULE(co_cpp, m) {
            double noise_std,
            double dt,
            PlantParams params,
-           bool backslash_mode,
            bool single_mode,
-           double backlash_alpha,
-           double backlash_m_mot,
-           double backlash_gap_pos,
-           double motor_force) {
+           double motor_force,
+           int n_updates) {
             if (q_arr.size() != 3 || dq_arr.size() != 3) {
                 throw std::runtime_error("update_physics_cpp expects q/dq arrays of size 3");
+            }
+            if (n_updates < 1) {
+                throw std::runtime_error("update_physics_cpp expects n_updates >= 1");
             }
 
             // Ensure arrays are writable
@@ -110,37 +121,22 @@ PYBIND11_MODULE(co_cpp, m) {
             dq.theta1_dot = dq_ptr[1];
             dq.theta2_dot = dq_ptr[2];
 
-            // Motor inertia (first-order lag): F_actual = F_old + (F_ideal - F_old) * (dt / tau)
-            double F_actual = F_ideal;
-            if (params.motor_tau > 0.0) {
-                F_actual = motor_force + (F_ideal - motor_force) * (dt / params.motor_tau);
-            }
-            motor_force = F_actual;
-
-            // Backlash (exactly as in rk4_step wrapper)
-            double F_real = F_actual;
-            double gap_pos = backlash_gap_pos;
-            if (backslash_mode) {
-                const double half_gap = backlash_alpha / 2.0;
-                const double a_rel = F_actual / backlash_m_mot;
-                gap_pos += a_rel * dt;
-                if (gap_pos > half_gap) {
-                    gap_pos = half_gap;
-                    F_real = F_actual;
-                } else if (gap_pos < -half_gap) {
-                    gap_pos = -half_gap;
-                    F_real = F_actual;
-                } else {
-                    F_real = 0.0;
+            for (int i = 0; i < n_updates; ++i) {
+                // Motor inertia (first-order lag):
+                // F_actual = F_old + (F_ideal - F_old) * (dt / tau)
+                double F_actual = F_ideal;
+                if (params.motor_tau > 0.0) {
+                    F_actual = motor_force + (F_ideal - motor_force) * (dt / params.motor_tau);
                 }
-            }
+                motor_force = F_actual;
 
-            // Sample noise from normal distribution N(noise_mean, noise_std²)
-            const double F_noise = (noise_std > 0.0)
-                ? sample_noise_force({noise_mean, noise_std})
-                : noise_mean;
-            const double F_total = F_real + F_noise;
-            rk4_step(q, dq, F_total, dt, params, single_mode);
+                // Sample noise from normal distribution N(noise_mean, noise_std²)
+                const double F_noise = (noise_std > 0.0)
+                    ? sample_noise_force({noise_mean, noise_std})
+                    : noise_mean;
+                const double F_total = F_actual + F_noise;
+                rk4_step(q, dq, F_total, dt, params, single_mode);
+            }
 
             // write back
             q_ptr[0] = q.x;
@@ -150,13 +146,12 @@ PYBIND11_MODULE(co_cpp, m) {
             dq_ptr[1] = dq.theta1_dot;
             dq_ptr[2] = dq.theta2_dot;
 
-            return py::make_tuple(q_arr, dq_arr, gap_pos, motor_force);
+            return py::make_tuple(q_arr, dq_arr, motor_force);
         },
         py::arg("q"), py::arg("dq"), py::arg("F_ideal"),
         py::arg("noise_mean"), py::arg("noise_std"), py::arg("dt"),
-        py::arg("params"), py::arg("backslash_mode"), py::arg("single_mode"),
-        py::arg("backlash_alpha"), py::arg("backlash_m_mot"),
-        py::arg("backlash_gap_pos"), py::arg("motor_force"));
+        py::arg("params"), py::arg("single_mode"), py::arg("motor_force"),
+        py::arg("n_updates") = 1);
 
     py::class_<State3>(m, "State3")
         .def(py::init<>())

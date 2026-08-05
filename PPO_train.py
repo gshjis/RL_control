@@ -4,65 +4,32 @@
 
 from __future__ import annotations
 
-import numpy as np
-
-from packages.controllers.PPO import PPOConfig, PPOController
-from packages.simulation.CO import (
-    ControllerConfig,
-    NoiseForce,
-    PlantConfig,
-    SensorConfig,
-)
-from packages.simulation.ENV.env import PendulumEnv
-from packages.simulation.GUI import PendulumViewer
-
-PLANT_CONFIG = PlantConfig(
-    M=1.0,        
-    m1=0.1,       
-    l1=0.3,       
-    m2=0.0,
-    l2=0.0,
-    g=-1.81,       
-    b_c=0.01,     
-    b_1=0.001,    
-    b_2=0.001,
-    single_pendulum_mode=True,
-    backslash_mode=False,
-    init_q=np.array([-1.0, np.pi, 0.0]),
-    init_dq=np.array([0.0, 0.0, 0.0]),
-    dt=0.002,
-    motor_time_constant=0.05
-)
-
-SENSOR_CONFIG = SensorConfig(
-    encoder_resolution_1=4096,
-    encoder_resolution_2=4096,
-    cart_sensor_resolution=0.0001,
-    noise_std_q=(0.0005, 0.002, 0.002),
-    noise_std_dq=(0.005, 0.01, 0.01),
-)
-
-CONTROLLER_CONFIG = ControllerConfig(
-    dt=0.01,
-    max_force=24.0,
-    has_velocity_sensors=False,
-    filter_cutoff_hz=50.0,
-)
-
-NOISE = NoiseForce(mean=0.00, std=0.03)
-TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
+from configs import *
+from packages.controllers.PPO import PPOController
+from packages.simulation.ENV import env_orcestrator
 
 if __name__ == "__main__":
-
-    ppo_config = PPOConfig(
-        total_timesteps=200_000,
-        n_steps=2048
-    )
 
     ppo_controller = PPOController(
         ppo_config=ppo_config,
         controller_config=CONTROLLER_CONFIG,
     )
+
+    def terminate_condition(s, s_t) -> bool:
+        return bool(abs(s[0] - s_t[0]) > 0.5 or abs(s[1] - s_t[0]) > 0.26)
+
+    def cost_f(s, s_t)->float:
+        diff = s_t - s
+        return np.dot(diff, diff).item()
+
+    env_orcestrator = env_orcestrator.EnvOrchestrator(
+        PLANT_CONFIG,
+        SENSOR_CONFIG,
+        cost_f,
+        terminate_condition,
+        8, 
+        CONTROLLER_CONFIG,
+        target)
 
     print("Обучение PPO...")
     print(f"  total_timesteps = {ppo_config.total_timesteps}")
@@ -70,21 +37,6 @@ if __name__ == "__main__":
     print(f"  Инерция двигателя: τ = {PLANT_CONFIG.motor_time_constant} с")
 
     ppo_controller.train(
-        plant_config=PLANT_CONFIG,
-        sensor_config=SENSOR_CONFIG,
-        noise=NOISE,
-        target_state=TARGET,
+        env_orcestrator
     )
     print("Обучение PPO завершено!")
-
-    # ── Сохранение модели + VecNormalize ────────────────────────────────
-    ppo_controller.save("checkpoints/ppo/final_model.zip")
-    print("Модель сохранена: checkpoints/ppo/final_model.zip")
-
-    # ── Запуск GUI с обученным PPO ──────────────────────────────────────
-    env = PendulumEnv(
-        PLANT_CONFIG, SENSOR_CONFIG, ppo_controller, NOISE, TARGET,
-        max_force=CONTROLLER_CONFIG.max_force,
-    )
-    viewer = PendulumViewer(env=env)
-    viewer.use()

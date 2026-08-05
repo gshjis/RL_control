@@ -5,24 +5,16 @@ from .datatypes import (
     PlantConfig,
     SensorConfig,
 )
-from .pendulum import BacklashModel, ObjectOfControl
-from .sensor import SensorBlock
-from .signal_processing import Differentiator, SignalFilter
+from .pendulum import ObjectOfControl
 
 __all__ = [
-    # pendulum
-    "BacklashModel",
     # controller
     "Controller",
     "ControllerConfig",
-    # signal processing
-    "Differentiator",
     # datatypes
     "NoiseForce",
     "ObjectOfControl",
     "PlantConfig",
     # sensor
-    "SensorBlock",
     "SensorConfig",
-    "SignalFilter",
 ]

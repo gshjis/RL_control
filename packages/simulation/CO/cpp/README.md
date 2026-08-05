@@ -1,7 +1,18 @@
 # C++ / PyBind11 backend
 
-Папка содержит C++ ядро симуляции CO (`co_physics.cpp`/`.hpp`)
-и pybind11-биндинг (`co_bindings.cpp`).
+Папка содержит C++ ядро симуляции CO и pybind11-биндинг (`co_bindings.cpp`):
+
+- `co_physics.cpp`/`.hpp` — физика (интегратор RK4, уравнения движения).
+- `co_signal.cpp`/`.hpp` — обработка сигналов: `Differentiator` (численное
+  дифференцирование + ФНЧ для оценки скорости) и `SignalFilter`
+  (сглаживание первого порядка). Полные реализации, ранее жившие в
+  `signal_processing.py`.
+- `co_sensor.cpp`/`.hpp` — блок датчиков `SensorBlock` (квантование энкодеров
+  + белый шум из предвычисленного пула). Полная реализация, ранее жившая
+  в `sensor.py`.
+
+Эти компоненты используются напрямую через pybind11 API (`co_cpp.SensorBlock`,
+`co_cpp.Differentiator`, `co_cpp.SignalFilter`) — без Python-обёрток.
 
 ## Требования
 
@@ -17,7 +28,9 @@
 
 ## Сборка
 
-Из **корня проекта** (`/home/gshjis/Python_projects/RL`):
+Используйте **внешнее виртуальное окружение из корня проекта** (`.venv`),
+не создавайте новое внутри `packages/simulation/CO/`. Из **корня проекта**
+(`/home/gshjis/Python_projects/RL`):
 
 ```bash
 # 1. Подготовить build-директорию
@@ -25,16 +38,17 @@ cd packages/simulation/CO/cpp
 rm -rf build
 mkdir build && cd build
 
-# 2. Запустить cmake с Python из poetry
+# 2. Запустить cmake с Python из корневого poetry-окружения
 cmake .. \
-  -DPython_EXECUTABLE="$(poetry run python -c 'import sys; print(sys.executable)')" \
+  -DPython_EXECUTABLE="$(poetry env info -p)/bin/python" \
   -DCMAKE_BUILD_TYPE=Release
 
 # 3. Собрать
 cmake --build . -j "$(nproc)"
 ```
 
-После успешной сборки бинарный модуль появится здесь:
+После успешной сборки бинарный модуль появится **сразу** здесь (CMake
+настроен на вывод в каталог пакета, копировать вручную не нужно):
 
 ```
 packages/simulation/CO/co_cpp.so
@@ -53,9 +67,18 @@ print('Functions:', [f for f in dir(m) if not f.startswith('_')])
 Ожидаемый вывод:
 ```
 C++ backend OK: <module 'co_cpp' from '.../packages/simulation/CO/co_cpp.so'>
-Functions: ['NoiseForce', 'PlantParams', 'State3', 'StateDot3',
+Functions: ['Differentiator', 'NoiseForce', 'PlantParams', 'SensorBlock',
+           'SignalFilter', 'State3', 'StateDot3',
            'rk4_step', 'update_physics_cpp']
 ```
+
+## Многоступенчатое обновление физики
+
+`update_physics_cpp` принимает дополнительный аргумент `n_updates` (по
+умолчанию `1`) — целое число подшагов, выполняемых с одной и той же силой
+`F_ideal`. На каждом подшаге заново применяются модель двигателя и шум,
+поэтому эффект силы корректно накапливается. При `n_updates == 1` поведение
+идентично исходному одноступенчатому вызову.
 
 ## Быстрая пересборка (если build уже настроен)
 
