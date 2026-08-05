@@ -98,7 +98,6 @@ class ObjectOfControl:
             self._motor_force,
             int(n_updates),
         )
-
     def get_telemetry(self) -> np.ndarray:
         """
         Получить измеренное состояние: берёт реальное состояние маятника,

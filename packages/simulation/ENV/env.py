@@ -58,11 +58,13 @@ class PendulumEnv(gym.Env):
     ) -> tuple[np.ndarray, dict[str, Any]]:
  
         super().reset()
+        if self._t > 2:
+            print(self._t)
         self._t = 0
 
         self._plant.reset()
-        r = np.concatenate(self._plant.get_clean_state())
-        return (r,{})
+        obs = np.concatenate(self._plant.get_clean_state()) - self._target(self._t)
+        return (obs,{})
 
 
     def step(
@@ -77,16 +79,17 @@ class PendulumEnv(gym.Env):
         self._plant.update_physics(self._old_action, prev_a_upds) # TODO второе число, количество тактов, возмущения реализуются в С++
         # обновить физику на протяжении 80% от одного такта контроллера с новой силой
         self._plant.update_physics(action.item(), new_a_upds)  # TODO второе число, количество тактов, возмущения реализуются в С++
-
         # вычислить награду
+
         observation = self._plant.get_telemetry()
         target_t = self._target(self._t)
-        reward = self._cost_function(observation-target_t)
+        obs = observation-target_t
+        reward = self._cost_function(obs)
 
         # проверить на терминальность
-        terminate_flag = self._terminate_condition(observation-target_t,)
+        terminate_flag = self._terminate_condition(obs)
 
         self._t += self._controller_dt
         # вернуть значения  
-        return observation-target_t, reward, terminate_flag, False, {}
+        return obs, reward, terminate_flag, False, {}
     

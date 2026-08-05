@@ -9,7 +9,7 @@ from packages.simulation.CO import (
 )
 
 ppo_config = PPOConfig(
-    total_timesteps=500_000,
+    total_timesteps=1_000_000,
     n_steps=2048
 )
 PLANT_CONFIG = PlantConfig(

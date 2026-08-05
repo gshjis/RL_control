@@ -8,6 +8,9 @@ from configs import *
 from packages.controllers.PPO import PPOController
 from packages.simulation.ENV import env_orcestrator
 
+# Имя (базовое) для сохранения модели, нормализатора и конфигов.
+MODEL_NAME = "checkpoints/ppo/best/ppo"
+
 if __name__ == "__main__":
 
     ppo_controller = PPOController(
@@ -19,7 +22,6 @@ if __name__ == "__main__":
         return bool(abs(e[1]) > 0.2)
 
     def cost_f(error) -> float:
-
         return 1
 
     env_orcestrator = env_orcestrator.EnvOrchestrator(
@@ -35,8 +37,12 @@ if __name__ == "__main__":
     print(f"  total_timesteps = {ppo_config.total_timesteps}")
     print("  Пробел — сброс, C — мотор вкл/выкл, Q / ESC — выход")
     print(f"  Инерция двигателя: τ = {PLANT_CONFIG.motor_time_constant} с")
-
+    ppo_controller.load("checkpoints/ppo/best/ppo")
     ppo_controller.train(
         env_orcestrator
     )
+
+    # Сохранить модель, нормализатор и конфиги.
+    ppo_controller.save(MODEL_NAME)
+    print(f"Модель сохранена: {MODEL_NAME}")
     print("Обучение PPO завершено!")

@@ -21,7 +21,7 @@ class Controller(ABC):
 
     @abstractmethod
     def action(
-        self, s_clean: np.ndarray, target_state: np.ndarray
+        self, error: np.ndarray
     ) -> np.ndarray: 
         ...
 

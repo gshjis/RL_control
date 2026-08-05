@@ -1,8 +1,11 @@
 """
-Запуск GUI-симуляции с предобученной PPO-моделью.
+Запуск GUI-симуляции перевёрнутого маятника.
 
 Использование:
     poetry run python run_gui.py
+
+Если найдена предобученная PPO-модель — используется она, иначе ручное
+управление стрелками (←/→).
 """
 
 from __future__ import annotations
@@ -11,33 +14,33 @@ from pathlib import Path
 
 import numpy as np
 
+from configs import *
+from configs import target
 from packages.controllers.PPO import PPOConfig, PPOController
 from packages.simulation.CO import (
     ControllerConfig,
-    NoiseForce,
     PlantConfig,
     SensorConfig,
 )
 from packages.simulation.ENV.env import PendulumEnv
 from packages.simulation.GUI import PendulumViewer
 
-# ── Конфигурация (та же, что в main.py) ────────────────────────────────
+# ── Конфигурация ─────────────────────────────────────────────────────────
 PLANT_CONFIG = PlantConfig(
-    M=1.0,        
-    m1=0.1,       
-    l1=0.3,       
+    M=1.0,
+    m1=0.1,
+    l1=0.3,
     m2=0.0,
     l2=0.0,
-    g=-9.81,       
-    b_c=0.01,     
-    b_1=0.001,    
+    g=-9.81,
+    b_c=0.01,
+    b_1=0.001,
     b_2=0.001,
     single_pendulum_mode=True,
-    backslash_mode=False,
     init_q=np.array([0.0, np.pi, 0.0]),
     init_dq=np.array([0.0, 0.0, 0.0]),
     dt=0.002,
-    motor_time_constant=0.05
+    motor_time_constant=0.05,
 )
 
 SENSOR_CONFIG = SensorConfig(
@@ -55,35 +58,44 @@ CONTROLLER_CONFIG = ControllerConfig(
     filter_cutoff_hz=50.0,
 )
 
-NOISE = NoiseForce(mean=0.00, std=0.03)
-TARGET = np.array([0.0, np.pi, 0.0, 0.0, 0.0, 0.0])
+TARGET = np.array([0.0, 1, 0.0, 0.0, 0.0, 0.0])
 
-# Приоритет: final_model (с VecNormalize) → best_model
-MODEL_PATH = "checkpoints/ppo/best/best_model.zip"
-if not Path(MODEL_PATH).exists():
-    MODEL_PATH = "checkpoints/ppo/best/best_model.zip"
+# Имя (базовое) сохранённой модели — должно совпадать с MODEL_NAME в PPO_train.py.
+MODEL_NAME = "checkpoints/ppo/best/ppo"
+
+
+def _cost(o: np.ndarray) -> float:
+    return 1
+
+
+def terminate_condition(e) -> bool:
+    return bool(abs(e[1]) > 0.2)
+
+
+def _target(t: float) -> np.ndarray:
+    return TARGET
 
 
 def main() -> None:
-    # ── Загрузка предобученной модели ──────────────────────────────────
-    controller = PPOController.from_pretrained(
-        MODEL_PATH,
-        ppo_config=PPOConfig(),
-        controller_config=CONTROLLER_CONFIG,
-    )
-    print(f"Загружена модель: {MODEL_PATH}")
-    print(f"  VecNormalize: {'есть' if controller._vec_normalize is not None else 'нет'}")
-
-    # ── Создание среды и GUI ───────────────────────────────────────────
+    # ── Среда ────────────────────────────────────────────────────────────
     env = PendulumEnv(
         PLANT_CONFIG,
         SENSOR_CONFIG,
-        controller,
-        NOISE,
-        TARGET,
-        max_force=CONTROLLER_CONFIG.max_force,
+        _cost,
+        terminate_condition,
+        CONTROLLER_CONFIG,
+        target,
     )
-    viewer = PendulumViewer(env=env)
+
+    # ── Контроллер (если есть предобученная модель) ─────────────────────
+    controller = None
+    if Path(f"{MODEL_NAME}_model.zip").exists():
+        controller = PPOController.load(MODEL_NAME)
+        print(f"Загружена модель: {MODEL_NAME}")
+    else:
+        print(f"Модель {MODEL_NAME} не найдена — ручное управление (←/→).")
+
+    viewer = PendulumViewer(env=env, controller=controller)
     viewer.use()
 
 
