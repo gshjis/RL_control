@@ -47,17 +47,7 @@ TARGET = np.array([0.0, 1, 0.0, 0.0, 0.0, 0.0])
 
 # Имя (базовое) сохранённой модели — должно совпадать с MODEL_NAME в PPO_train.py.
 
-
-
-def terminate_condition(e) -> bool:
-    return False
-
-
-def cost_f(error) -> float:
-    return -error[1]
-
-def truncated_condition(error)->bool:
-    return abs(error[1]) < 0.01
+ 
 def main() -> None:
     # ── Среда ────────────────────────────────────────────────────────────
     env = PendulumEnv(

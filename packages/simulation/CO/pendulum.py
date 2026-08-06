@@ -111,5 +111,5 @@ class ObjectOfControl:
         self._motor_force = 0.0
         self._cpp_sensor.reset()
 
-    def get_clean_state(self) -> tuple[np.ndarray, np.ndarray]:
-        return (self._q, self._dq)
+    def get_clean_state(self) -> np.ndarray:
+        return np.concatenate((self._q, self._dq))

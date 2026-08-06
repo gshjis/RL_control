@@ -41,7 +41,7 @@ class PendulumEnv(gym.Env):
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(6,),
+            shape=(12,),
             dtype=np.float64
         )
         self.action_space = spaces.Box(
@@ -60,12 +60,11 @@ class PendulumEnv(gym.Env):
     ) -> tuple[np.ndarray, dict[str, Any]]:
  
         super().reset()
-        if self._t > 2:
-            print(self._t)
+
         self._t = 0
 
         self._plant.reset()
-        obs = np.concatenate(self._plant.get_clean_state()) - self._target(self._t)
+        obs = np.concatenate([self._plant.get_clean_state(), self._target(self._t)])
         return (obs,{})
 
 
@@ -78,19 +77,20 @@ class PendulumEnv(gym.Env):
         new_a_upds = updates_total - prev_a_upds
 
         # обновить физику на протяжении 20% от одного такта контроллера с старой силой
-        self._plant.update_physics(self._old_action, prev_a_upds) # TODO второе число, количество тактов, возмущения реализуются в С++
+        self._plant.update_physics(action.item(), prev_a_upds) 
         # обновить физику на протяжении 80% от одного такта контроллера с новой силой
-        self._plant.update_physics(action.item(), new_a_upds)  # TODO второе число, количество тактов, возмущения реализуются в С++
+        self._plant.update_physics(action.item(), new_a_upds)
         # вычислить награду
 
         observation = self._plant.get_telemetry()
         target_t = self._target(self._t)
-        obs = observation-target_t
-        reward = self._cost_function(obs)
+        obs = np.concatenate([observation, target_t])
+        error = target_t-observation
+        reward = self._cost_function(error)
 
         # проверить на терминальность
-        terminate_flag = self._terminate_condition(obs)
-        truncated_flag = self._truncated_condition(obs)
+        terminate_flag = self._terminate_condition(observation)
+        truncated_flag = self._truncated_condition(observation)
         self._t += self._controller_dt
         # вернуть значения  
         return obs, reward, terminate_flag, truncated_flag, {}

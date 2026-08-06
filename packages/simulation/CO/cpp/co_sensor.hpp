@@ -33,8 +33,8 @@ namespace co {
  *        + filtering.
  *
  * The output vector has the layout
- * `(x, sin(theta1), sin(theta2), d(x)/dt, d(sin(theta1))/dt,
- * d(sin(theta2))/dt)` — the position, the sines of the pendulum angles and
+ * `(x, cos(theta1), cos(theta2), d(x)/dt, d(cos(theta1))/dt,
+ * d(cos(theta2))/dt)` — the position, the cosines of the pendulum angles and
  * their time derivatives (computed by finite differences of the noisy
  * features and smoothed by the filter).
  */
@@ -70,8 +70,8 @@ public:
      *        measurement from the true state.
      * @param raw_q True generalized coordinates (x, theta1, theta2).
      * @param raw_dq True generalized velocities (x_dot, theta1_dot, theta2_dot).
-     * @return Measured vector (x, sin(theta1), sin(theta2), d(x)/dt,
-     *         d(sin(theta1))/dt, d(sin(theta2))/dt).
+     * @return Measured vector (x, cos(theta1), cos(theta2), d(x)/dt,
+     *         d(cos(theta1))/dt, d(cos(theta2))/dt).
      */
     std::vector<double> get_telemetry(const std::vector<double>& raw_q,
                                       const std::vector<double>& raw_dq);

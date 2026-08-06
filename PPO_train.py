@@ -3,7 +3,6 @@
 """
 
 from __future__ import annotations
-from os import error
 
 from configs import *
 from packages.controllers.PPO import PPOController
@@ -12,21 +11,22 @@ from packages.simulation.ENV import env_orcestrator
 # Имя (базовое) для сохранения модели, нормализатора и конфигов.
 MODEL_NAME = "checkpoints/ppo/2_pendl"
 
+def terminate_condition(error) -> bool:
+    return abs(error[0]) > 0.5
+
+def cost_f(error) -> float:
+    
+    return np.exp(1/(error[1]+0.01))
+
+def truncated_condition(error)->bool:
+    return abs(error[0])<0.01 and abs(error[1])<0.1
+
 if __name__ == "__main__":
 
     ppo_controller = PPOController(
         ppo_config=ppo_config,
         controller_config=CONTROLLER_CONFIG,
     )
-
-    def terminate_condition(error) -> bool:
-        return error[0] > 1
-
-    def cost_f(error) -> float:
-        return -(error[1]**2)
-    
-    def truncated_condition(error)->bool:
-        return abs(error[1]**2 + error[4]**2) < 0.1
 
     env_orcestrator = env_orcestrator.EnvOrchestrator(
         PLANT_CONFIG,

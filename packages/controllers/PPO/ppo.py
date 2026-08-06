@@ -110,13 +110,14 @@ class PPOController(Controller):
 
         return obj
 
-    def action(self,error: np.ndarray) -> np.ndarray:
+    def action(self,state_target: np.ndarray) -> np.ndarray:
         if self._model is None:
             raise RuntimeError("PPO-модель не загружена. Вызовите train() или load().")
         
         if self._vec_normalize is not None:
-            obs = self._vec_normalize.normalize_obs(error)
-        obs = error
+            obs = self._vec_normalize.normalize_obs(state_target)
+        else:
+            obs = state_target
         actions, _ = self._model.predict(obs, deterministic=True)
         return actions 
 

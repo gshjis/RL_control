@@ -61,11 +61,11 @@ std::vector<double> SensorBlock::get_telemetry(
     }
 
     // 3. Transform the noisy coordinates into the feature vector:
-    //    [x, sin(theta1), sin(theta2)].
+    //    [x, cos(theta1), cos(theta2)].
     std::vector<double> feat(3);
     feat[0] = meas_[0];
-    feat[1] = std::sin(meas_[1]);
-    feat[2] = std::sin(meas_[2]);
+    feat[1] = std::cos(meas_[1]);
+    feat[2] = std::cos(meas_[2]);
 
     // 4. Differentiator: derivatives of the features (finite differences
     //    between the current and previous noisy sample).
