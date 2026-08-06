@@ -17,8 +17,10 @@ class EnvOrchestrator:
         terminate_condition:Callable[[np.ndarray], bool],
         n_simulations: int,
         controller_config:ControllerConfig,
+        truncated_condition:Callable[[np.ndarray], bool],        
         target: Callable[[float], np.ndarray]
     ):
+        self._truncated_condition:Callable[[np.ndarray], bool] = truncated_condition
         self._target:Callable[[float], np.ndarray] = target
         self._controller_config:ControllerConfig = controller_config
         self._plant_config = plant_config
@@ -42,5 +44,6 @@ class EnvOrchestrator:
             self._terminate_condition,
             self._controller_config,
             self._target,
+            self._truncated_condition
         )
     

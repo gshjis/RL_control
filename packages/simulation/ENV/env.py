@@ -20,10 +20,12 @@ class PendulumEnv(gym.Env):
         cost_function,
         terminate_condition:Callable[[np.ndarray], bool],
         controller_config:ControllerConfig,
-        target: Callable[[float], np.ndarray]
+        target: Callable[[float], np.ndarray],
+        truncated_condition:Callable[[np.ndarray], bool]
     ) -> None:
         super().__init__()
         self._t = 0
+        self._truncated_condition = truncated_condition
         self._target:Callable[[float], np.ndarray] = target
         self._plant_config:PlantConfig = plant_config
         self._sensor_config:SensorConfig = sensor_config
@@ -88,8 +90,8 @@ class PendulumEnv(gym.Env):
 
         # проверить на терминальность
         terminate_flag = self._terminate_condition(obs)
-
+        truncated_flag = self._truncated_condition(obs)
         self._t += self._controller_dt
         # вернуть значения  
-        return obs, reward, terminate_flag, False, {}
+        return obs, reward, terminate_flag, truncated_flag, {}
     

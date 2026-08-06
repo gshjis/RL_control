@@ -76,7 +76,7 @@ class PPOController(Controller):
             json.dump(payload, f)
 
     @classmethod
-    def load(cls, name: str) -> "PPOController":
+    def load(cls, name: str) -> PPOController:
         """
         Загрузить модель и нормализатор (VecNormalize) по имени.
 
@@ -116,13 +116,14 @@ class PPOController(Controller):
         
         if self._vec_normalize is not None:
             obs = self._vec_normalize.normalize_obs(error)
+        obs = error
         actions, _ = self._model.predict(obs, deterministic=True)
         return actions 
 
     def train(
         self, env_orchestrator: EnvOrchestrator,
         ) -> None:
-        vec_env = VecNormalize(env_orchestrator._env_hub, norm_obs=True, norm_reward=False)
+        vec_env = VecNormalize(env_orchestrator._env_hub, norm_obs=True, norm_reward=True)
         self._vec_normalize = vec_env
         if self._model is None:
             self._model = SB3_PPO(
@@ -137,7 +138,6 @@ class PPOController(Controller):
                 seed=self._ppo_config.seed,
             )
 
-        # Обучить
         self._model.learn(
             total_timesteps=self._ppo_config.total_timesteps,
         )

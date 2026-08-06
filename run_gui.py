@@ -24,24 +24,9 @@ from packages.simulation.CO import (
 )
 from packages.simulation.ENV.env import PendulumEnv
 from packages.simulation.GUI import PendulumViewer
+from PPO_train import *
 
 # ── Конфигурация ─────────────────────────────────────────────────────────
-PLANT_CONFIG = PlantConfig(
-    M=1.0,
-    m1=0.1,
-    l1=0.3,
-    m2=0.0,
-    l2=0.0,
-    g=-9.81,
-    b_c=0.01,
-    b_1=0.001,
-    b_2=0.001,
-    single_pendulum_mode=True,
-    init_q=np.array([0.0, np.pi, 0.0]),
-    init_dq=np.array([0.0, 0.0, 0.0]),
-    dt=0.002,
-    motor_time_constant=0.05,
-)
 
 SENSOR_CONFIG = SensorConfig(
     encoder_resolution_1=4096,
@@ -61,31 +46,29 @@ CONTROLLER_CONFIG = ControllerConfig(
 TARGET = np.array([0.0, 1, 0.0, 0.0, 0.0, 0.0])
 
 # Имя (базовое) сохранённой модели — должно совпадать с MODEL_NAME в PPO_train.py.
-MODEL_NAME = "checkpoints/ppo/best/ppo"
 
-
-def _cost(o: np.ndarray) -> float:
-    return 1
 
 
 def terminate_condition(e) -> bool:
-    return bool(abs(e[1]) > 0.2)
+    return False
 
 
-def _target(t: float) -> np.ndarray:
-    return TARGET
+def cost_f(error) -> float:
+    return -error[1]
 
-
+def truncated_condition(error)->bool:
+    return abs(error[1]) < 0.01
 def main() -> None:
     # ── Среда ────────────────────────────────────────────────────────────
     env = PendulumEnv(
         PLANT_CONFIG,
         SENSOR_CONFIG,
-        _cost,
+        cost_f,
         terminate_condition,
         CONTROLLER_CONFIG,
         target,
-    )
+        truncated_condition,
+        )
 
     # ── Контроллер (если есть предобученная модель) ─────────────────────
     controller = None
