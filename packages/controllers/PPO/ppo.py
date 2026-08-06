@@ -128,13 +128,14 @@ class PPOController(Controller):
         self._vec_normalize = vec_env
         if self._model is None:
             self._model = SB3_PPO(
-                "MlpPolicy",
+                self._ppo_config.policy,
                 self._vec_normalize,
                 learning_rate=self._ppo_config.learning_rate,
                 n_steps=self._ppo_config.n_steps,
                 batch_size=self._ppo_config.batch_size,
                 n_epochs=self._ppo_config.n_epochs,
                 gamma=self._ppo_config.gamma,
+                policy_kwargs=dict(net_arch=self._ppo_config.net_arch),
                 verbose=1,
                 seed=self._ppo_config.seed,
             )

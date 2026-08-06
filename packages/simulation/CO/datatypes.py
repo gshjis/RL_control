@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -19,7 +20,7 @@ class PlantConfig:
     m2: float = 0.0
     l1: float = 1.0
     l2: float = 0.0
-    g: float = 9.81
+    g: float = -9.81
 
     b_c: float = 0.0
     b_1: float = 0.0
@@ -28,9 +29,8 @@ class PlantConfig:
     single_pendulum_mode: bool = True
     motor_time_constant: float = 0.0
 
-    init_q: np.ndarray = field(default_factory=lambda: np.array([0.0, np.pi, 0.0]))
-    init_dq: np.ndarray = field(default_factory=lambda: np.array([0.0, 0.0, 0.0]))
-
+    init_q_stats: np.ndarray = field(default_factory=lambda: np.array([[0.0, np.pi, 0.0], [0.1, 0.1, 0.0]]))
+    init_dq_stats: np.ndarray = field(default_factory=lambda: np.array([[0.0, 0.0, 0.0], [0.1, 0.1, 0.0]]))
     dt: float = 0.0005
 
     mean_f:float = 0
@@ -48,6 +48,12 @@ class PlantConfig:
         object.__setattr__(self, "J1", (1.0 / 12.0) * self.m1 * self.l1**2)
         object.__setattr__(self, "J2", (1.0 / 12.0) * self.m2 * self.l2**2)
 
+    def init_q(self) -> np.ndarray:
+        t = np.random.normal(self.init_q_stats[0], self.init_q_stats[1])
+        return t
+    def init_dq(self) -> np.ndarray:
+        t = np.random.normal(self.init_dq_stats[0], self.init_dq_stats[1])
+        return t
     def to_dict(self) -> dict:
         return {
             "M": self.M,
@@ -65,8 +71,8 @@ class PlantConfig:
             "b_2": self.b_2,
             "single_pendulum_mode": self.single_pendulum_mode,
             "motor_time_constant": self.motor_time_constant,
-            "init_q": list(self.init_q),
-            "init_dq": list(self.init_dq),
+            "init_q": self.init_q().tolist(),
+            "init_dq": self.init_dq().tolist(),
             "dt": self.dt
         }
 
@@ -91,8 +97,8 @@ class PlantConfig:
             b_2=self.b_2,
             single_pendulum_mode=self.single_pendulum_mode,
             motor_time_constant=self.motor_time_constant,
-            init_q=self.init_q.copy(),
-            init_dq=self.init_dq.copy(),
+            init_q_stats=self.init_q_stats,
+            init_dq_stats=self.init_dq_stats,
             dt=self.dt,
         )
 

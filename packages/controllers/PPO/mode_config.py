@@ -9,7 +9,7 @@ class PPOConfig:
 
     # Параметры сети
     policy: str = "MlpPolicy"
-    net_arch: list[int] = field(default_factory=lambda: [64, 64])
+    net_arch: list[int] = field(default_factory=lambda: [64, 64, 64])
 
     # Параметры обучения (оптимизированы для CartPole/кастомной среды)
     learning_rate: float = 3e-4          

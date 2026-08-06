@@ -126,7 +126,6 @@ class PendulumViewer:
         self._sine2_hist.append(float(np.sin(q[2])))
         self._err_hist.append(float(q[0] - self._env._target(self._time_acc)[0]))
         if terminated:
-            print(terminated)
             self._reset()
 
     # ── Обработка ввода ───────────────────────────────────────────────────

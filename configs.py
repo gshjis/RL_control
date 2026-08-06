@@ -10,23 +10,31 @@ from packages.simulation.CO import (
 
 ppo_config = PPOConfig(
     total_timesteps=500_000,
-    n_steps=2048
+    n_steps=2048,
 )
+
+# Начальное состояние задаётся распределением: матрица 2×3
+# (строка 0 — средние, строка 1 — СКО для каждой координаты).
+# init_q() / init_dq() возвращают сэмпл из N(mean, std).
 PLANT_CONFIG = PlantConfig(
-    M=1.0,        
-    m1=0.1,       
-    l1=0.3,       
+    M=1.0,
+    m1=0.1,
+    l1=0.3,
     m2=0.0,
     l2=0.0,
-    g=-0.3,       
-    b_c=0.01,     
-    b_1=0.001,    
+    g=-10,
+    b_c=0.01,
+    b_1=0.001,
     b_2=0.001,
     single_pendulum_mode=True,
-    init_q=np.array([0.0, 0.0, 0.0]),
-    init_dq=np.array([1.0, -3.0, 0.0]),
+    init_q_stats=np.array([
+        [0.0, 0.0, 0.0], 
+        [0.01, 1, 0.0]]),
+    init_dq_stats=np.array([
+        [0.0, 0.0, 0.0], 
+        [0.0, 5, 0.0]]),
     dt=0.001,
-    motor_time_constant=0.01
+    motor_time_constant=0.01,
 )
 
 SENSOR_CONFIG = SensorConfig(
@@ -46,5 +54,6 @@ CONTROLLER_CONFIG = ControllerConfig(
 
 NOISE = NoiseForce(mean=0.00, std=0.03)
 
-def target(time:float) -> np.ndarray:
+
+def target(time: float) -> np.ndarray:
     return np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])

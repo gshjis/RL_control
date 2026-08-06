@@ -10,17 +10,38 @@ from packages.simulation.ENV import env_orcestrator
 
 # Имя (базовое) для сохранения модели, нормализатора и конфигов.
 MODEL_NAME = "checkpoints/ppo/2_pendl"
+import numpy as np
 
 def terminate_condition(error) -> bool:
-    return abs(error[0]) > 0.5
+    """Завершаем эпизод при падении маятника или выезде тележки."""
+    # Падение маятника (угол > 60° от вертикали)
+    if error[1] > 1.0:  # cos(θ) < 0.5 → угол > 60°
+        return True
+    # Выезд тележки за пределы
+    if abs(error[0]) > 2.0:  # тележка уехала слишком далеко
+        return True
+    return False
 
 def cost_f(error) -> float:
+    """Награда: близость к вертикали + центр."""
+    cos_error = error[1]   # ошибка по косинусу (чем меньше, тем лучше)
+    x_error = error[0]     # ошибка по положению тележки
     
-    return np.exp(1/(error[1]+0.01))
+    # Квадратичный штраф (стабильный и понятный)
+    reward = -cos_error**2 * 100.0
+    
+    # Бонус за удержание вертикали
+    if abs(cos_error) < 0.05:
+        reward += 50.0
+    
+        
+    return reward
 
-def truncated_condition(error)->bool:
-    return abs(error[0])<0.01 and abs(error[1])<0.1
-
+def truncated_condition(error) -> bool:
+    """Успех — маятник в вертикали и тележка в центре."""
+    cos_error = error[1]
+    x_error = error[0]
+    return abs(cos_error) < 0.02 and abs(x_error) < 0.02
 if __name__ == "__main__":
 
     ppo_controller = PPOController(

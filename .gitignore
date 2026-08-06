@@ -17,3 +17,4 @@ packages/simulation/CO/cpp/*.pyd
 
 checkpoints
 reinforce_models
+.venv

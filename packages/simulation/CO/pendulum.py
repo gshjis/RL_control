@@ -10,7 +10,7 @@ class ObjectOfControl:
         plant_config: PlantConfig,
         sensor_config: SensorConfig
         ) -> None:
-
+        self.__plant_config:PlantConfig = plant_config
         self._M: float = plant_config.M
         self._m1: float = plant_config.m1
         self._m2: float = plant_config.m2
@@ -25,8 +25,8 @@ class ObjectOfControl:
         self._b_1: float = plant_config.b_1
         self._b_2: float = plant_config.b_2
         self._single_mode: bool = plant_config.single_pendulum_mode
-        self._q_init: np.ndarray = plant_config.init_q.copy()
-        self._dq_init: np.ndarray = plant_config.init_dq.copy()
+        self._q_init: np.ndarray = plant_config.init_q()
+        self._dq_init: np.ndarray = plant_config.init_dq()
         self._q: np.ndarray = self._q_init.copy()
         self._dq: np.ndarray = self._dq_init.copy()
         self._dt: float = plant_config.dt
@@ -106,8 +106,8 @@ class ObjectOfControl:
         return self._cpp_sensor.get_telemetry(self._q, self._dq)
 
     def reset(self) -> None:
-        self._q = self._q_init.copy()
-        self._dq = self._dq_init.copy()
+        self._q = self.__plant_config.init_q()
+        self._dq = self.__plant_config.init_dq()
         self._motor_force = 0.0
         self._cpp_sensor.reset()
 
