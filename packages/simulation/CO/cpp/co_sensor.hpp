@@ -33,10 +33,11 @@ namespace co {
  *        + filtering.
  *
  * The output vector has the layout
- * `(x, cos(theta1), cos(theta2), d(x)/dt, d(cos(theta1))/dt,
- * d(cos(theta2))/dt)` — the position, the cosines of the pendulum angles and
- * their time derivatives (computed by finite differences of the noisy
- * features and smoothed by the filter).
+ * `(x, cos(theta1), sin(theta1), cos(theta2), sin(theta2), d(x)/dt,
+ * d(theta1)/dt, d(theta2)/dt)` — the position, the sine/cosine of the
+ * pendulum angles, and the time derivatives of the position and the angles
+ * (computed by finite differences of the noisy state and smoothed by the
+ * filter).
  */
 class SensorBlock {
 public:
@@ -70,8 +71,8 @@ public:
      *        measurement from the true state.
      * @param raw_q True generalized coordinates (x, theta1, theta2).
      * @param raw_dq True generalized velocities (x_dot, theta1_dot, theta2_dot).
-     * @return Measured vector (x, cos(theta1), cos(theta2), d(x)/dt,
-     *         d(cos(theta1))/dt, d(cos(theta2))/dt).
+     * @return Measured vector (x, cos(theta1), sin(theta1), cos(theta2),
+     *         sin(theta2), d(x)/dt, d(theta1)/dt, d(theta2)/dt).
      */
     std::vector<double> get_telemetry(const std::vector<double>& raw_q,
                                       const std::vector<double>& raw_dq);

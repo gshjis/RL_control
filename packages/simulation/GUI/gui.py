@@ -288,8 +288,8 @@ class PendulumViewer:
         )
 
     def _draw_hud(self) -> None:
-        q = self._plant.q
-        dq = self._plant.dq
+        q = self._plant.get_telemetry()[:3]
+        dq = self._plant.get_telemetry()[3:]
         lines = [
             f"t = {self._sim_time:6.2f} s",
             f"x  = {q[0]:+7.3f} m",

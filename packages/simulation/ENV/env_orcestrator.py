@@ -14,13 +14,13 @@ class EnvOrchestrator:
         plant_config,
         sensor_config,
         cost_function,
-        terminate_condition:Callable[[np.ndarray], bool],
+        terminate_condition:Callable[[np.ndarray, np.ndarray], bool],
         n_simulations: int,
         controller_config:ControllerConfig,
-        truncated_condition:Callable[[np.ndarray], bool],        
+        truncated_condition:Callable[[np.ndarray, np.ndarray], bool],
         target: Callable[[float], np.ndarray]
     ):
-        self._truncated_condition:Callable[[np.ndarray], bool] = truncated_condition
+        self._truncated_condition:Callable[[np.ndarray,np.ndarray], bool] = truncated_condition
         self._target:Callable[[float], np.ndarray] = target
         self._controller_config:ControllerConfig = controller_config
         self._plant_config = plant_config

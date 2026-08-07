@@ -7,9 +7,12 @@ import os
 import gymnasium as gym
 import numpy as np
 from stable_baselines3 import PPO as SB3_PPO
+from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import (
     DummyVecEnv,
+    VecEnv,
     VecNormalize,
+    sync_envs_normalization,
 )
 
 from packages.controllers.PPO.mode_config import PPOConfig
@@ -18,6 +21,71 @@ from packages.simulation.CO import (
     ControllerConfig,
 )
 from packages.simulation.ENV.env_orcestrator import EnvOrchestrator
+
+
+class ValidationCallback(BaseCallback):
+    """
+    Периодически оценивает текущую политику на отдельной валидационной среде
+    и выводит среднюю награду.
+
+    Parameters
+    ----------
+    eval_env : VecEnv
+        Валидационная среда (обёрнутая в VecNormalize).
+    eval_freq : int
+        Как часто (в шагах) выполнять оценку.
+    n_eval_episodes : int
+        Сколько эпизодов прогонять за одну оценку.
+    max_episode_steps : int
+        Максимальная длина эпизода при оценке.
+    """
+
+    def __init__(
+        self,
+        eval_env: VecEnv,
+        eval_freq: int = 10_000,
+        n_eval_episodes: int = 10,
+        max_episode_steps: int = 1000,
+        verbose: int = 1,
+    ) -> None:
+        super().__init__(verbose)
+        self.eval_env = eval_env
+        self.eval_freq = int(eval_freq)
+        self.n_eval_episodes = int(n_eval_episodes)
+        self.max_episode_steps = int(max_episode_steps)
+
+    def _on_step(self) -> bool:
+        if self.n_calls % self.eval_freq == 0:
+            self._evaluate()
+        return True
+
+    def _evaluate(self) -> None:
+        train_vec_norm = self.model.get_vec_normalize_env()
+        if train_vec_norm is not None:
+            sync_envs_normalization(train_vec_norm, self.eval_env)
+
+        episode_rewards: list[float] = []
+        for _ in range(self.n_eval_episodes):
+            obs = self.eval_env.reset()
+            done = False
+            ep_reward = 0.0
+            steps = 0
+            while not done and steps < self.max_episode_steps:
+                actions, _ = self.model.predict(obs, deterministic=True)
+                obs, rewards, dones, _ = self.eval_env.step(actions)
+                ep_reward += float(rewards[0])
+                steps += 1
+                done = bool(dones[0])
+            episode_rewards.append(ep_reward)
+
+        mean_reward = float(np.mean(episode_rewards))
+        self.logger.record("eval/mean_reward", mean_reward)
+        self.logger.dump(self.num_timesteps)
+        if self.verbose:
+            print(
+                f"[Eval] timesteps={self.num_timesteps} | "
+                f"mean_reward={mean_reward:.4f}"
+            )
 
 
 class _DummyEnv(gym.Env):
@@ -140,6 +208,20 @@ class PPOController(Controller):
                 seed=self._ppo_config.seed,
             )
 
+        # Валидационная среда (отдельная, обёрнутая в VecNormalize).
+        eval_env = VecNormalize(
+            DummyVecEnv([env_orchestrator._make_env]),
+            norm_obs=True,
+            norm_reward=True,
+        )
+        eval_callback = ValidationCallback(
+            eval_env=eval_env,
+            eval_freq=self._ppo_config.eval_freq,
+            n_eval_episodes=self._ppo_config.n_eval_episodes,
+            max_episode_steps=self._ppo_config.max_episode_steps,
+        )
+
         self._model.learn(
             total_timesteps=self._ppo_config.total_timesteps,
+            callback=eval_callback,
         )

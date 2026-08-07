@@ -18,10 +18,10 @@ class PendulumEnv(gym.Env):
         plant_config,
         sensor_config,
         cost_function,
-        terminate_condition:Callable[[np.ndarray], bool],
+        terminate_condition:Callable[[np.ndarray, np.ndarray], bool],
         controller_config:ControllerConfig,
         target: Callable[[float], np.ndarray],
-        truncated_condition:Callable[[np.ndarray], bool]
+        truncated_condition:Callable[[np.ndarray, np.ndarray], bool]
     ) -> None:
         super().__init__()
         self._t = 0
@@ -35,13 +35,13 @@ class PendulumEnv(gym.Env):
         self._old_action: float = 0
 
         self._cost_function:Callable = cost_function
-        self._terminate_condition:Callable[[np.ndarray], bool] = terminate_condition
+        self._terminate_condition:Callable[[np.ndarray, np.ndarray], bool] = terminate_condition
 
         self._controller_dt = controller_config.dt
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(12,),
+            shape=(8,),
             dtype=np.float64
         )
         self.action_space = spaces.Box(
@@ -64,8 +64,8 @@ class PendulumEnv(gym.Env):
         self._t = 0
 
         self._plant.reset()
-        obs = np.concatenate([self._plant.get_clean_state(), self._target(self._t)])
-        return (obs,{})
+        obs = np.concatenate([self._plant.get_telemetry(), self._target(self._t)])
+        return (self._plant.get_telemetry(),{})
 
 
     def step(
@@ -85,13 +85,14 @@ class PendulumEnv(gym.Env):
         observation = self._plant.get_telemetry()
         target_t = self._target(self._t)
         obs = np.concatenate([observation, target_t])
-        error = target_t-observation
-        reward = self._cost_function(error)
+
+        # Награда считается по истинному состоянию и цели (энергетическая).
+        reward = self._cost_function(observation, target_t)
 
         # проверить на терминальность
-        terminate_flag = self._terminate_condition(observation)
-        truncated_flag = self._truncated_condition(observation)
+        terminate_flag = self._terminate_condition(observation, target_t)
+        truncated_flag = self._truncated_condition(observation, target_t)
         self._t += self._controller_dt
         # вернуть значения  
-        return obs, reward, terminate_flag, truncated_flag, {}
+        return observation, reward, terminate_flag, truncated_flag, {}
     

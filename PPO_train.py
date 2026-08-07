@@ -12,36 +12,46 @@ from packages.simulation.ENV import env_orcestrator
 MODEL_NAME = "checkpoints/ppo/2_pendl"
 import numpy as np
 
-def terminate_condition(error) -> bool:
-    """Завершаем эпизод при падении маятника или выезде тележки."""
-    # Падение маятника (угол > 60° от вертикали)
-    if error[1] > 1.0:  # cos(θ) < 0.5 → угол > 60°
-        return True
-    # Выезд тележки за пределы
-    if abs(error[0]) > 2.0:  # тележка уехала слишком далеко
-        return True
+
+def terminate_condition(state:np.ndarray, target:np.ndarray) -> bool:
+    return abs(state[0]) > 0.5
+
+def reward_f(state: np.ndarray, target: np.ndarray) -> float:
+    # 1. Распаковка state (согласно твоему описанию)
+    x = state[0]          # положение тележки
+    cos_theta1 = state[1] # косинус угла 1-го звена (цель: -1)
+    sin_theta1 = state[2] # синус угла 1-го звена (для направления)
+    cos_theta2 = state[3] # косинус 2-го звена (сейчас 0)
+    sin_theta2 = state[4] # синус 2-го звена (сейчас 0)
+    dx = state[5]         # скорость тележки
+    dtheta1 = state[6]    # угловая скорость 1-го звена
+    dtheta2 = state[7]    # угловая скорость 2-го звена
+
+    # 2. ОСНОВНАЯ НАГРАДА: за угол (подъем маятника)
+    # cos = -1 (вверху) -> штраф 0. cos = 1 (внизу) -> штраф -4
+    reward_angle = 1/((cos_theta1 + 1.0)**2 + 0.1)
+
+    # 3. ШТРАФ ЗА ВЫЛЕТ ТЕЛЕЖКИ (чтобы не улетала за край)
+
+    # 4. ШТРАФ ЗА СИЛУ (чтобы не дергалась без толку)
+    # Коэффициент 0.001 — стандарт, чтобы большие силы не поощрялись
+
+    # 5. СТАБИЛИЗАЦИЯ ВВЕРХУ (бонус за то, что поймал)
+    # Если маятник почти встал (cos < -0.95) и скорость маленькая (|dtheta| < 1.0)
+    # даем большую положительную награду, чтобы агент учился удерживать его там
+    if cos_theta1 < -0.95 and abs(dtheta1) < 1.0:
+        bonus_up = 10.0
+    else:
+        bonus_up = 0.0
+
+    # 6. Итоговая награда
+    reward = reward_angle + bonus_up
+
+    return reward
+    
+def truncated_condition(state:np.ndarray, target:np.ndarray) -> bool:
     return False
 
-def cost_f(error) -> float:
-    """Награда: близость к вертикали + центр."""
-    cos_error = error[1]   # ошибка по косинусу (чем меньше, тем лучше)
-    x_error = error[0]     # ошибка по положению тележки
-    
-    # Квадратичный штраф (стабильный и понятный)
-    reward = -cos_error**2 * 100.0
-    
-    # Бонус за удержание вертикали
-    if abs(cos_error) < 0.05:
-        reward += 50.0
-    
-        
-    return reward
-
-def truncated_condition(error) -> bool:
-    """Успех — маятник в вертикали и тележка в центре."""
-    cos_error = error[1]
-    x_error = error[0]
-    return abs(cos_error) < 0.02 and abs(x_error) < 0.02
 if __name__ == "__main__":
 
     ppo_controller = PPOController(
@@ -52,9 +62,9 @@ if __name__ == "__main__":
     env_orcestrator = env_orcestrator.EnvOrchestrator(
         PLANT_CONFIG,
         SENSOR_CONFIG,
-        cost_f,
+        reward_f,
         terminate_condition,
-        10,
+        8,
         CONTROLLER_CONFIG,
         truncated_condition,
         target

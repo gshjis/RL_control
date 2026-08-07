@@ -61,25 +61,31 @@ std::vector<double> SensorBlock::get_telemetry(
     }
 
     // 3. Transform the noisy coordinates into the feature vector:
-    //    [x, cos(theta1), cos(theta2)].
-    std::vector<double> feat(3);
+    //    [x, cos(theta1), sin(theta1), cos(theta2), sin(theta2)].
+    std::vector<double> feat(5);
     feat[0] = meas_[0];
     feat[1] = std::cos(meas_[1]);
-    feat[2] = std::cos(meas_[2]);
+    feat[2] = std::sin(meas_[1]);
+    feat[3] = std::cos(meas_[2]);
+    feat[4] = std::sin(meas_[2]);
 
-    // 4. Differentiator: derivatives of the features (finite differences
-    //    between the current and previous noisy sample).
-    std::vector<double> vel = differentiator_.calculate_velocity(feat);
+    // 4. Differentiator: derivatives of the state [x, theta1, theta2]
+    //    (finite differences between the current and previous noisy sample),
+    //    т.е. [dx/dt, dtheta1/dt, dtheta2/dt].
+    std::vector<double> state(meas_.begin(), meas_.begin() + 3);
+    std::vector<double> vel = differentiator_.calculate_velocity(state);
 
-    // 5. Assemble the raw 6-vector [feat, vel].
-    std::vector<double> raw6(6);
+    // 5. Assemble the raw 8-vector [feat, vel].
+    std::vector<double> raw8(8);
+    for (int i = 0; i < 5; ++i) {
+        raw8[i] = feat[i];
+    }
     for (int i = 0; i < 3; ++i) {
-        raw6[i] = feat[i];
-        raw6[3 + i] = vel[i];
+        raw8[5 + i] = vel[i];
     }
 
     // 6. Filter the noisy states and their derivatives.
-    return filter_.filter_signal(raw6);
+    return filter_.filter_signal(raw8);
 }
 
 void SensorBlock::reset() {

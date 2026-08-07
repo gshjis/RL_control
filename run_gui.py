@@ -53,7 +53,7 @@ def main() -> None:
     env = PendulumEnv(
         PLANT_CONFIG,
         SENSOR_CONFIG,
-        cost_f,
+        reward_f,
         terminate_condition,
         CONTROLLER_CONFIG,
         target,
