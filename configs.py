@@ -9,7 +9,7 @@ from packages.simulation.CO import (
 )
 
 ppo_config = PPOConfig(
-    total_timesteps=300_000,
+    total_timesteps=3_000_000,
 )
 
 # Начальное состояние задаётся распределением: матрица 2×3 

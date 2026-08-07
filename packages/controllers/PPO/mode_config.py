@@ -10,7 +10,7 @@ class PPOConfig:
     net_arch: list[int] = field(default_factory=lambda: [64, 64, 64])
 
     learning_rate: float = 3e-4
-    n_steps: int = 1024
+    n_steps: int = 4096
     batch_size: int = 64
     n_epochs: int = 8                  
     
@@ -24,7 +24,7 @@ class PPOConfig:
     max_grad_norm: float = 0.5
 
     total_timesteps: int = 300_000     
-    max_episode_steps: int = 1024
+    max_episode_steps: int = 10000
     seed: int = 42
 
     eval_freq: int = 10_000

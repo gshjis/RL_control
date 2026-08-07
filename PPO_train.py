@@ -64,7 +64,7 @@ if __name__ == "__main__":
         SENSOR_CONFIG,
         reward_f,
         terminate_condition,
-        8,
+        5,
         CONTROLLER_CONFIG,
         truncated_condition,
         target

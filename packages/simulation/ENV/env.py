@@ -41,7 +41,7 @@ class PendulumEnv(gym.Env):
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
-            shape=(8,),
+            shape=(14,),
             dtype=np.float64
         )
         self.action_space = spaces.Box(
@@ -65,7 +65,7 @@ class PendulumEnv(gym.Env):
 
         self._plant.reset()
         obs = np.concatenate([self._plant.get_telemetry(), self._target(self._t)])
-        return (self._plant.get_telemetry(),{})
+        return (obs,{})
 
 
     def step(
@@ -94,5 +94,5 @@ class PendulumEnv(gym.Env):
         truncated_flag = self._truncated_condition(observation, target_t)
         self._t += self._controller_dt
         # вернуть значения  
-        return observation, reward, terminate_flag, truncated_flag, {}
+        return obs, reward, terminate_flag, truncated_flag, {}
     
