@@ -9,12 +9,12 @@ from packages.controllers.PPO import PPOController
 from packages.simulation.ENV import env_orcestrator
 
 # Имя (базовое) для сохранения модели, нормализатора и конфигов.
-MODEL_NAME = "checkpoints/ppo/2_pendl"
+MODEL_NAME = "checkpoints/po/2_pendl"
 import numpy as np
 
 
 def terminate_condition(state:np.ndarray, target:np.ndarray) -> bool:
-    return abs(state[0]) > 0.5
+    return abs(state[0]) > 1
 
 def reward_f(state: np.ndarray, target: np.ndarray) -> float:
     # 1. Распаковка state (согласно твоему описанию)
@@ -47,7 +47,7 @@ def reward_f(state: np.ndarray, target: np.ndarray) -> float:
     # # 6. Итоговая награда
     # reward = reward_angle + bonus_up
 
-    return -(cos_theta1)**2
+    return np.exp(-(cos_theta1)+2.001)
     
 def truncated_condition(state:np.ndarray, target:np.ndarray) -> bool:
     return False
@@ -64,7 +64,7 @@ if __name__ == "__main__":
         SENSOR_CONFIG,
         reward_f,
         terminate_condition,
-        5,
+        10,
         CONTROLLER_CONFIG,
         truncated_condition,
         target

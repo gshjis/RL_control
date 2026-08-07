@@ -192,7 +192,7 @@ class PPOController(Controller):
     def train(
         self, env_orchestrator: EnvOrchestrator,
         ) -> None:
-        vec_env = VecNormalize(env_orchestrator._env_hub, norm_obs=True, norm_reward=True)
+        vec_env = VecNormalize(env_orchestrator._env_hub, norm_obs=True, norm_reward=False)
         self._vec_normalize = vec_env
         if self._model is None:
             self._model = SB3_PPO(
