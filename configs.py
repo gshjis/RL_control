@@ -28,7 +28,7 @@ PLANT_CONFIG = PlantConfig(
     single_pendulum_mode=True,
     init_q_stats=np.array([
         [0.0, 0.0, 0.0], 
-        [0.01, 0.0, 0.0]]),
+        [0.01, 0.4, 0.0]]),
     init_dq_stats=np.array([
         [0.0, 0.0, 0.0], 
         [0.0, 0.1, 0.0]]),
