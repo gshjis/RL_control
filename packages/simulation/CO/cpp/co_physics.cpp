@@ -105,8 +105,20 @@ void rk4_step(State3& q, StateDot3& dq, double F_total, double dt,
                           a.theta2_dot + scale * k.theta2_dot};
     };
 
-    const StateDot3 k1 = compute_ddq(q, dq, F_total, p, single_mode);
-    const State3 q2 = add_q(q, dq, 0.5 * dt);
+    // In single-pendulum mode theta2 is a constrained coordinate.  Enforce
+    // the constraint here as well as in compute_ddq(), so non-zero initial
+    // values cannot make the locked coordinate drift.
+    if (single_mode) {
+        q.theta2 = 0.0;
+        dq.theta2_dot = 0.0;
+    }
+
+    // Keep the original velocity stage.  dq is updated below, but the q
+    // update must use k1_q (= the velocity at the beginning of the step), not
+    // the already integrated final velocity.
+    const StateDot3 dq1 = dq;
+    const StateDot3 k1 = compute_ddq(q, dq1, F_total, p, single_mode);
+    const State3 q2 = add_q(q, dq1, 0.5 * dt);
     const StateDot3 dq2 = add_dq(dq, k1, 0.5 * dt);
 
     const StateDot3 k2 = compute_ddq(q2, dq2, F_total, p, single_mode);
@@ -119,15 +131,20 @@ void rk4_step(State3& q, StateDot3& dq, double F_total, double dt,
 
     const StateDot3 k4 = compute_ddq(q4, dq4, F_total, p, single_mode);
 
+    // Update q using the four velocity stages before overwriting dq.
+    q.x      += (dt / 6.0) * (dq1.x_dot + 2.0 * dq2.x_dot + 2.0 * dq3.x_dot + dq4.x_dot);
+    q.theta1 += (dt / 6.0) * (dq1.theta1_dot + 2.0 * dq2.theta1_dot + 2.0 * dq3.theta1_dot + dq4.theta1_dot);
+    q.theta2 += (dt / 6.0) * (dq1.theta2_dot + 2.0 * dq2.theta2_dot + 2.0 * dq3.theta2_dot + dq4.theta2_dot);
+
     // Update dq: dq += dt/6 * (k1 + 2k2 + 2k3 + k4)
     dq.x_dot     += (dt / 6.0) * (k1.x_dot + 2.0 * k2.x_dot + 2.0 * k3.x_dot + k4.x_dot);
     dq.theta1_dot += (dt / 6.0) * (k1.theta1_dot + 2.0 * k2.theta1_dot + 2.0 * k3.theta1_dot + k4.theta1_dot);
     dq.theta2_dot += (dt / 6.0) * (k1.theta2_dot + 2.0 * k2.theta2_dot + 2.0 * k3.theta2_dot + k4.theta2_dot);
 
-    // Update q: q += dt/6 * (dq + 2*dq2 + 2*dq3 + dq4)
-    q.x      += (dt / 6.0) * (dq.x_dot + 2.0 * dq2.x_dot + 2.0 * dq3.x_dot + dq4.x_dot);
-    q.theta1 += (dt / 6.0) * (dq.theta1_dot + 2.0 * dq2.theta1_dot + 2.0 * dq3.theta1_dot + dq4.theta1_dot);
-    q.theta2 += (dt / 6.0) * (dq.theta2_dot + 2.0 * dq2.theta2_dot + 2.0 * dq3.theta2_dot + dq4.theta2_dot);
+    if (single_mode) {
+        q.theta2 = 0.0;
+        dq.theta2_dot = 0.0;
+    }
 
     // Normalize pendulum angles to [0, 2π) to prevent floating-point drift
     // and ensure consistent error computation in the controller.

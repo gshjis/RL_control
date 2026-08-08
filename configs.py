@@ -9,7 +9,10 @@ from packages.simulation.CO import (
 )
 
 ppo_config = PPOConfig(
-    total_timesteps=3_000_000,
+    total_timesteps=600_000,
+    eval_freq=100_000,
+    n_eval_episodes=2,
+    max_episode_steps=2_000,
 )
 
 # Начальное состояние задаётся распределением: матрица 2×3 
@@ -21,17 +24,17 @@ PLANT_CONFIG = PlantConfig(
     l1=0.3,
     m2=0.0,
     l2=0.0,
-    g=-3,
+    g=-9.81,
     b_c=0.01,
     b_1=0.001,
     b_2=0.001,
     single_pendulum_mode=True,
     init_q_stats=np.array([
-        [0.0, 0.0, 0.0], 
-        [0.01, 0.4, 0.0]]),
+        [0.0, np.pi, 0.0], 
+        [0.01, 0.02, 0.0]]),
     init_dq_stats=np.array([
         [0.0, 0.0, 0.0], 
-        [0.0, 0.1, 0.0]]),
+        [0.0, 0.05, 0.0]]),
     dt=0.001,
     motor_time_constant=0.01,
 )

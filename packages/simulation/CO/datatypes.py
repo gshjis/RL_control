@@ -20,6 +20,7 @@ class PlantConfig:
     m2: float = 0.0
     l1: float = 1.0
     l2: float = 0.0
+    # Signed gravity convention used by the C++ dynamics: g < 0.
     g: float = -9.81
 
     b_c: float = 0.0

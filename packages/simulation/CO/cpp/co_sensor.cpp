@@ -1,7 +1,6 @@
 #include "co_sensor.hpp"
 
 #include <cmath>
-#include <random>
 
 namespace co {
 
@@ -26,66 +25,29 @@ SensorBlock::SensorBlock(double cart_resolution,
       filter_(filter_cutoff_hz, dt) {
     (void)noise_std_dq;  // reserved: velocity noise arises from differentiation
 
-    // Pre-generate the position-noise pool once (3 values per sample).
-    std::mt19937 rng(static_cast<unsigned int>(seed));
-    noise_pool_.resize(pool_size_);
-    for (int i = 0; i < pool_size_; ++i) {
-        noise_pool_[i].resize(3);
-        for (int j = 0; j < 3; ++j) {
-            std::normal_distribution<double> dist(0.0, std_q_[j]);
-            noise_pool_[i][j] = dist(rng);
-        }
-    }
+    // Temporary exact-sensor mode: retain the constructor API, but bypass
+    // quantization, noise, differentiation and filtering in get_telemetry().
+    (void)noise_std_q;
+    (void)noise_std_dq;
+    (void)seed;
+    (void)pool_size;
 }
 
 std::vector<double> SensorBlock::get_telemetry(
     const std::vector<double>& raw_q,
     const std::vector<double>& raw_dq) {
-    const double cs = cart_step_;
-    const double a1 = angle_step_1_;
-    const double a2 = angle_step_2_;
-
-    // 1. Quantize coordinates.
-    meas_[0] = std::rint(raw_q[0] / cs) * cs;
-    meas_[1] = std::rint(raw_q[1] / a1) * a1;
-    meas_[2] = std::rint(raw_q[2] / a2) * a2;
-
-    // 2. Add position noise from the cyclic pool.
-    const std::vector<double>& noise = noise_pool_[noise_index_];
-    noise_index_++;
-    if (noise_index_ >= pool_size_) {
-        noise_index_ = 0;
-    }
-    for (int i = 0; i < 3; ++i) {
-        meas_[i] += noise[i];
-    }
-
-    // 3. Transform the noisy coordinates into the feature vector:
-    //    [x, cos(theta1), sin(theta1), cos(theta2), sin(theta2)].
-    std::vector<double> feat(5);
-    feat[0] = meas_[0];
-    feat[1] = std::cos(meas_[1]);
-    feat[2] = std::sin(meas_[1]);
-    feat[3] = std::cos(meas_[2]);
-    feat[4] = std::sin(meas_[2]);
-
-    // 4. Differentiator: derivatives of the state [x, theta1, theta2]
-    //    (finite differences between the current and previous noisy sample),
-    //    т.е. [dx/dt, dtheta1/dt, dtheta2/dt].
-    std::vector<double> state(meas_.begin(), meas_.begin() + 3);
-    std::vector<double> vel = differentiator_.calculate_velocity(state);
-
-    // 5. Assemble the raw 8-vector [feat, vel].
-    std::vector<double> raw8(8);
-    for (int i = 0; i < 5; ++i) {
-        raw8[i] = feat[i];
-    }
-    for (int i = 0; i < 3; ++i) {
-        raw8[5 + i] = vel[i];
-    }
-
-    // 6. Filter the noisy states and their derivatives.
-    return filter_.filter_signal(raw8);
+    // Exact telemetry with the existing observation layout:
+    // [x, cos(theta1), sin(theta1), cos(theta2), sin(theta2), dq].
+    return {
+        raw_q[0],
+        std::cos(raw_q[1]),
+        std::sin(raw_q[1]),
+        std::cos(raw_q[2]),
+        std::sin(raw_q[2]),
+        raw_dq[0],
+        raw_dq[1],
+        raw_dq[2],
+    };
 }
 
 void SensorBlock::reset() {

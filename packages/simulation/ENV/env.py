@@ -87,7 +87,7 @@ class PendulumEnv(gym.Env):
         obs = np.concatenate([observation, target_t])
 
         # Награда считается по истинному состоянию и цели (энергетическая).
-        reward = self._cost_function(observation, target_t)
+        reward = self._cost_function(observation, target_t, action.item())
 
         # проверить на терминальность
         terminate_flag = self._terminate_condition(observation, target_t)

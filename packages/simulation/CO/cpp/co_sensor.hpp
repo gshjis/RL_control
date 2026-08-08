@@ -2,8 +2,7 @@
 
 /**
  * @file co_sensor.hpp
- * @brief C++ sensor telemetry block: quantization + noise + differentiation
- *        + filtering.
+ * @brief C++ sensor telemetry block.
  *
  * Provides the full built-in implementation of the `SensorBlock` previously
  * living in Python (`sensor.py`). The telemetry pipeline is:
@@ -35,9 +34,9 @@ namespace co {
  * The output vector has the layout
  * `(x, cos(theta1), sin(theta1), cos(theta2), sin(theta2), d(x)/dt,
  * d(theta1)/dt, d(theta2)/dt)` — the position, the sine/cosine of the
- * pendulum angles, and the time derivatives of the position and the angles
- * (computed by finite differences of the noisy state and smoothed by the
- * filter).
+ * pendulum angles, and the exact time derivatives supplied by the physics
+ * backend. The current temporary implementation bypasses quantization, noise,
+ * differentiation and filtering.
  */
 class SensorBlock {
 public:
@@ -67,11 +66,10 @@ public:
                 double filter_cutoff_hz);
 
     /**
-     * @brief Produce a noisy, quantized, differentiated and filtered
-     *        measurement from the true state.
+     * @brief Produce telemetry from the true state.
      * @param raw_q True generalized coordinates (x, theta1, theta2).
      * @param raw_dq True generalized velocities (x_dot, theta1_dot, theta2_dot).
-     * @return Measured vector (x, cos(theta1), sin(theta1), cos(theta2),
+     * @return Exact-state vector (x, cos(theta1), sin(theta1), cos(theta2),
      *         sin(theta2), d(x)/dt, d(theta1)/dt, d(theta2)/dt).
      */
     std::vector<double> get_telemetry(const std::vector<double>& raw_q,

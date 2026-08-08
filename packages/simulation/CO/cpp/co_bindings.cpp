@@ -2,6 +2,8 @@
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
 
+#include <cmath>
+
 #include "co_physics.hpp"
 #include "co_sensor.hpp"
 #include "co_signal.hpp"
@@ -61,10 +63,11 @@ PYBIND11_MODULE(co_cpp, m) {
            PlantParams params,
            bool single_mode,
            double& motor_force) {
-            // Motor inertia (first-order lag)
+            // Exact zero-order-hold update of the first-order motor lag.
             double F_actual = F_ideal;
             if (params.motor_tau > 0.0) {
-                F_actual = motor_force + (F_ideal - motor_force) * (dt / params.motor_tau);
+                const double alpha = -std::expm1(-dt / params.motor_tau);
+                F_actual = motor_force + (F_ideal - motor_force) * alpha;
             }
             motor_force = F_actual;
 
@@ -125,11 +128,11 @@ PYBIND11_MODULE(co_cpp, m) {
             dq.theta2_dot = dq_ptr[2];
 
             for (int i = 0; i < n_updates; ++i) {
-                // Motor inertia (first-order lag):
-                // F_actual = F_old + (F_ideal - F_old) * (dt / tau)
+                // Exact zero-order-hold update of the first-order motor lag.
                 double F_actual = F_ideal;
                 if (params.motor_tau > 0.0) {
-                    F_actual = motor_force + (F_ideal - motor_force) * (dt / params.motor_tau);
+                    const double alpha = -std::expm1(-dt / params.motor_tau);
+                    F_actual = motor_force + (F_ideal - motor_force) * alpha;
                 }
                 motor_force = F_actual;
 

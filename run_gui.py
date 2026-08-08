@@ -62,7 +62,8 @@ def main() -> None:
 
     # ── Контроллер (если есть предобученная модель) ─────────────────────
     controller = None
-    if Path(f"{MODEL_NAME}_model.zip").exists():
+    MODEL_NAME = "checkpoints/ppo/validation/model_400000"
+    if Path(f"{MODEL_NAME}.zip").exists():
         controller = PPOController.load(MODEL_NAME)
         print(f"Загружена модель: {MODEL_NAME}")
     else:
