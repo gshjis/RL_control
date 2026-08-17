@@ -27,7 +27,6 @@ PLANT_CONFIG = PlantConfig(
     b_2=0.001,
     single_pendulum_mode=True,
     init_q_stats=np.array([
-        # Swing-up starts near the stable downward position theta=0.
         [0.0, np.pi, 0.0],
         [0.01, 0.00, 0.01]]),
     init_dq_stats=np.array([
@@ -56,5 +55,4 @@ NOISE = NoiseForce(mean=0.00, std=0.03)
 
 
 def target(time: float) -> np.ndarray:
-    # x=0, first link upright (theta1=pi), second link aligned (theta2=0).
     return np.array([0.0, -1.0, 0.0, 1.0, 0.0, 0.0])
