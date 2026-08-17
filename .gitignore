@@ -1,6 +1,8 @@
 .venv
 .mypy_cache
 __pycache__
+.ruff_cache
+.vscode
 
 # Temporary venv used during experimentation
 venv_tmp
@@ -18,3 +20,13 @@ packages/simulation/CO/cpp/*.pyd
 checkpoints
 reinforce_models
 .venv
+
+# Generated media and image artifacts
+*.gif
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+*.tif
+*.tiff

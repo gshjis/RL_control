@@ -472,6 +472,7 @@ from controller import Controller
 from datatypes import ControllerConfig
 import numpy as np
 
+
 class PController(Controller):
     def __init__(self, config: ControllerConfig) -> None:
         super().__init__(config)

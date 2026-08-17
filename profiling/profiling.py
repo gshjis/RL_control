@@ -1,23 +1,9 @@
-"""Свободное падение маятника из верхнего положения.
-
-Скрипт собирает два вида данных:
-
-* real state — истинные координаты и скорости из физического движка;
-* telemetry — выход блока датчиков после квантования, шума,
-  дифференцирования и фильтрации.
-
-Блок датчиков возвращает вектор из 8 элементов:
-``[x, cos(theta1), sin(theta1), cos(theta2), sin(theta2),
-dx/dt, dtheta1/dt, dtheta2/dt]``.
-Углы в телеметрии не возвращаются напрямую — вместо них возвращаются
-синус и косинус. Скорости в последних трёх элементах являются оценками
-датчика, а не истинными значениями из физической модели.
-"""
+"""Сравнивает истинное состояние маятника с телеметрией датчиков."""
 
 from __future__ import annotations
 
-import numpy as np
 import matplotlib.pyplot as plt
+import numpy as np
 
 from packages.simulation.CO import ObjectOfControl, PlantConfig, SensorConfig
 
@@ -29,12 +15,7 @@ def simulate_fall(
     bottom_tolerance: float = 2e-2,
     max_time: float = 10.0,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Симулировать падение первого звена из положения ``theta1 = pi``.
-
-    Нулевая сила приложена к тележке. Небольшое начальное отклонение нужно,
-    потому что идеально перевёрнутый маятник с нулевой скоростью является
-    математическим равновесием и самопроизвольно не начнёт падать.
-    """
+    """Принимает параметры опыта, возвращает время, состояние и телеметрию."""
 
     plant_config = PlantConfig(
         M=1.0,
@@ -162,16 +143,18 @@ def plot_results(
     fig.tight_layout()
     print(f"Симуляция завершена в t = {times[-1]:.4f} с")
     print(f"Размер real state: {real_states.shape}; размер telemetry: {measured.shape}")
-    print("Формат telemetry: [x, cos(theta1), sin(theta1), cos(theta2), "
-          "sin(theta2), dx/dt, dtheta1/dt, dtheta2/dt]")
+    print(
+        "Формат telemetry: [x, cos(theta1), sin(theta1), cos(theta2), "
+        "sin(theta2), dx/dt, dtheta1/dt, dtheta2/dt]"
+    )
     plt.show()
     velocity_error = np.cos(real_states[:, 1]) - measured[:, 1]
     print("velocity L2:", np.linalg.norm(velocity_error))
     print("velocity RMSE:", np.sqrt(np.mean(velocity_error**2)))
 
 
-
 def main() -> None:
+    """Запускает симуляцию падения и отображает результаты."""
     times, real_states, measured = simulate_fall()
     plot_results(times, real_states, measured)
 

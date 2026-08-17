@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
-import shutil
-import subprocess
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import pygame
@@ -18,27 +18,14 @@ from packages.simulation.GUI import constants as C
 
 
 class PendulumViewer:
-    """
-    Окно симуляции перевёрнутого маятника.
-
-    Принимает одну среду (``PendulumEnv``) и опциональный контроллер.
-    Если контроллер не задан — используется ручное управление стрелками.
-
-    Главный цикл ``use()``:
-    - отображает окно и рисует маятник согласно конфигурации (удлинение
-      стержня и масса отображаются как удлинение и размер точки на конце);
-    - работает на ``FPS = 120``;
-    - сбрасывает среду (возвращает показания датчиков);
-    - вычисляет управление контроллером и передаёт его в ``step()``;
-    - использует аккумулятор времени, чтобы симуляционное время совпадало
-      с реальным (компьютерным) временем.
-    """
+    """Принимает среду и контроллер, отображает симуляцию маятника."""
 
     def __init__(
         self,
         env: PendulumEnv,
         controller: Any,
     ) -> None:
+        """Принимает среду и необязательный контроллер, создаёт окно просмотра."""
         self._env = env
         self._controller = controller
 
@@ -115,7 +102,7 @@ class PendulumViewer:
         pygame.quit()
 
     def _toggle_recording(self) -> None:
-        """Start/stop recording and compile the captured frames on stop."""
+        """Запускает или останавливает запись кадров и сборку видео."""
         if self._recording:
             self._stop_recording()
             return
@@ -125,7 +112,7 @@ class PendulumViewer:
             print("ffmpeg не найден; запись невозможна")
             return
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")  # noqa: DTZ005
         recordings_dir = Path("recordings")
         recordings_dir.mkdir(parents=True, exist_ok=True)
         self._record_video = recordings_dir / f"session_{timestamp}.mp4"
@@ -133,16 +120,25 @@ class PendulumViewer:
         command = [
             ffmpeg,
             "-y",
-            "-f", "rawvideo",
-            "-vcodec", "rawvideo",
-            "-pix_fmt", "rgb24",
-            "-s", f"{C.WIDTH}x{C.HEIGHT}",
-            "-r", str(record_fps),
-            "-i", "-",
+            "-f",
+            "rawvideo",
+            "-vcodec",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{C.WIDTH}x{C.HEIGHT}",
+            "-r",
+            str(record_fps),
+            "-i",
+            "-",
             "-an",
-            "-c:v", "libx264",
-            "-preset", "ultrafast",
-            "-pix_fmt", "yuv420p",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
             str(self._record_video),
         ]
         self._record_process = subprocess.Popen(
@@ -155,14 +151,14 @@ class PendulumViewer:
         print(f"Запись начата: {self._record_video}")
 
     def _capture_frame(self) -> None:
+        """Передаёт текущий кадр в процесс записи видео."""
         if not self._recording or self._record_process is None:
             return
         if self._record_process.stdin is not None:
-            self._record_process.stdin.write(
-                pygame.image.tostring(self._screen, "RGB")
-            )
+            self._record_process.stdin.write(pygame.image.tostring(self._screen, "RGB"))
 
     def _stop_recording(self) -> None:
+        """Закрывает поток записи и ожидает завершения кодировщика."""
         if not self._recording or self._record_process is None:
             return
 
@@ -185,11 +181,7 @@ class PendulumViewer:
 
     # ── Сброс ─────────────────────────────────────────────────────────────
     def _reset(self) -> None:
-        """Сбросить симуляцию.
-
-        Если контроллера нет — маятник стартует отклонённым от нижнего
-        положения и колеблется свободно (сила = 0).
-        """
+        """Сбрасывает среду, время и историю графиков."""
         if self._controller is None:
             self._obs = self._plant.get_telemetry()
         else:
@@ -201,12 +193,13 @@ class PendulumViewer:
 
     # ── Шаг симуляции ─────────────────────────────────────────────────────
     def _step(self) -> None:
+        """Выполняет один шаг контроллера, физики и накопления графиков."""
         if self._controller is not None:
             action = self._controller.action(self._obs)
         else:
             action = np.array([self._manual_force], dtype=np.float64)
         self._last_action = float(np.asarray(action).reshape(-1)[0])
-        self._obs, self._reward, terminated, truncated, _ = self._env.step(action)
+        self._obs, self._reward, terminated, _, _ = self._env.step(action)
 
         self._sim_time += self._sim_dt
 
@@ -220,6 +213,7 @@ class PendulumViewer:
 
     # ── Обработка ввода ───────────────────────────────────────────────────
     def _handle_events(self) -> None:
+        """Обрабатывает события окна, клавиатуры и ручное управление."""
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self._running = False
@@ -240,6 +234,7 @@ class PendulumViewer:
 
     # ── Отрисовка ─────────────────────────────────────────────────────────
     def _draw(self) -> None:
+        """Рисует маятник, управление, графики и информационную панель."""
         self._screen.fill(C.BLACK)
         self._draw_track()
         self._draw_pendulum()
@@ -248,11 +243,11 @@ class PendulumViewer:
         self._draw_hud()
 
     def _draw_track(self) -> None:
-        pygame.draw.line(
-            self._screen, C.GRAY, (0, C.TRACK_Y), (C.WIDTH, C.TRACK_Y), 2
-        )
+        """Рисует направляющую тележки."""
+        pygame.draw.line(self._screen, C.GRAY, (0, C.TRACK_Y), (C.WIDTH, C.TRACK_Y), 2)
 
     def _draw_pendulum(self) -> None:
+        """Рисует тележку, стержни и грузы по текущим координатам."""
         q = self._plant.q
         x = float(q[0])
         th1 = float(q[1])
@@ -262,9 +257,7 @@ class PendulumViewer:
         pivot_y = float(C.TRACK_Y)
 
         # Тележка.
-        cart_rect = pygame.Rect(
-            0, 0, C.CART_W, C.CART_H
-        )
+        cart_rect = pygame.Rect(0, 0, C.CART_W, C.CART_H)
         cart_rect.center = (int(pivot_x), int(pivot_y))
         pygame.draw.rect(self._screen, C.WHITE, cart_rect, 2)
 
@@ -290,9 +283,7 @@ class PendulumViewer:
 
         # Масса первого стержня (размер пропорционален массе).
         r1 = max(3.0, C.PEND_R * (1.0 + self._m1))
-        pygame.draw.circle(
-            self._screen, C.RED, (int(end1_x), int(end1_y)), int(r1)
-        )
+        pygame.draw.circle(self._screen, C.RED, (int(end1_x), int(end1_y)), int(r1))
 
         # Второй стержень (если есть).
         if self._l2 > 0.0:
@@ -311,6 +302,7 @@ class PendulumViewer:
             )
 
     def _draw_force_arrow(self) -> None:
+        """Рисует стрелку текущей управляющей силы."""
         pivot_x = C.WIDTH / 2.0 + float(self._plant.q[0]) * C.SCALE
         length = self._last_action * C.FORCE_SCALE
         start = (int(pivot_x), int(C.TRACK_Y - C.CART_H))
@@ -322,6 +314,7 @@ class PendulumViewer:
             pygame.draw.circle(self._screen, C.GREEN, tip, 4)
 
     def _draw_graphs(self) -> None:
+        """Рисует историю углов и ошибки положения тележки."""
         # График sin(θ₁) и sin(θ₂).
         self._draw_plot(
             C.SINE_GRAPH_X,
@@ -356,6 +349,7 @@ class PendulumViewer:
         series: list[tuple[deque[float], tuple[int, int, int]]],
         label: str,
     ) -> None:
+        """Принимает данные и область, рисует один график истории."""
         pygame.draw.rect(self._screen, bg, (x, y, w, h))
         pygame.draw.rect(self._screen, grid, (x, y, w, h), 1)
         # Средняя линия.
@@ -375,11 +369,10 @@ class PendulumViewer:
                 pts.append((int(px), int(py)))
             pygame.draw.lines(self._screen, color, False, pts, 2)
 
-        self._screen.blit(
-            self._small_font.render(label, True, C.WHITE), (x + 4, y + 4)
-        )
+        self._screen.blit(self._small_font.render(label, True, C.WHITE), (x + 4, y + 4))
 
     def _draw_hud(self) -> None:
+        """Рисует текущее состояние, награду и управляющее воздействие."""
         q = self._plant.get_telemetry()[:3]
         dq = self._plant.get_telemetry()[3:]
         lines = [

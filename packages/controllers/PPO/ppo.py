@@ -3,6 +3,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+from typing import cast
 
 import gymnasium as gym
 import numpy as np
@@ -24,21 +25,7 @@ from packages.simulation.ENV.env_orcestrator import EnvOrchestrator
 
 
 class ValidationCallback(BaseCallback):
-    """
-    Периодически оценивает текущую политику на отдельной валидационной среде
-    и выводит среднюю награду.
-
-    Parameters
-    ----------
-    eval_env : VecEnv
-        Валидационная среда (обёрнутая в VecNormalize).
-    eval_freq : int
-        Как часто (в шагах) выполнять оценку.
-    n_eval_episodes : int
-        Сколько эпизодов прогонять за одну оценку.
-    max_episode_steps : int
-        Максимальная длина эпизода при оценке.
-    """
+    """Оценивает PPO в отдельной среде и сохраняет результаты проверки."""
 
     def __init__(
         self,
@@ -49,6 +36,7 @@ class ValidationCallback(BaseCallback):
         checkpoint_dir: str = "checkpoints/ppo/validation",
         verbose: int = 1,
     ) -> None:
+        """Принимает среду и параметры оценки, сохраняет их для callback."""
         super().__init__(verbose)
         self.eval_env = eval_env
         self.eval_freq = int(eval_freq)
@@ -58,6 +46,7 @@ class ValidationCallback(BaseCallback):
         self._last_eval_timestep = 0
 
     def _on_step(self) -> bool:
+        """Проверяет частоту оценки и возвращает признак продолжения обучения."""
         # n_calls counts callback invocations, while num_timesteps counts
         # actual transitions and includes all parallel environments. Schedule
         # validation by the latter so eval_freq means training timesteps.
@@ -67,6 +56,7 @@ class ValidationCallback(BaseCallback):
         return True
 
     def _evaluate(self) -> None:
+        """Оценивает политику, записывает награду и сохраняет checkpoint."""
         train_vec_norm = self.model.get_vec_normalize_env()
         if train_vec_norm is not None:
             sync_envs_normalization(train_vec_norm, self.eval_env)
@@ -78,7 +68,9 @@ class ValidationCallback(BaseCallback):
             ep_reward = 0.0
             steps = 0
             while not done and steps < self.max_episode_steps:
-                actions, _ = self.model.predict(obs, deterministic=True)
+                actions, _ = self.model.predict(
+                    cast(np.ndarray, obs), deterministic=True
+                )
                 obs, rewards, dones, _ = self.eval_env.step(actions)
                 ep_reward += float(rewards[0])
                 steps += 1
@@ -112,24 +104,30 @@ class _DummyEnv(gym.Env):
     """Минимальная среда для загрузки VecNormalize (нужен только venv)."""
 
     def __init__(self, observation_space, action_space) -> None:
+        """Принимает пространства наблюдений и действий для загрузки статистики."""
         super().__init__()
         self.observation_space = observation_space
         self.action_space = action_space
 
     def reset(self, *, seed=None, options=None):
+        """Принимает seed и options, возвращает случайное наблюдение."""
         return self.observation_space.sample(), {}
 
     def step(self, action):
+        """Принимает действие, возвращает фиктивный результат шага."""
         return self.observation_space.sample(), 0.0, False, False, {}
 
 
 class PPOController(Controller):
+    """Управляет обучением, сохранением и применением политики PPO."""
+
     def __init__(
         self,
         ppo_config: PPOConfig,
         controller_config: ControllerConfig,
         model: SB3_PPO | None = None,
     ) -> None:
+        """Принимает конфигурации PPO и контроллера, создаёт обёртку модели."""
 
         super().__init__(controller_config)
         self.name = "PPO"
@@ -141,14 +139,7 @@ class PPOController(Controller):
         self._vec_normalize: VecNormalize | None = None
 
     def save(self, name: str) -> None:
-        """
-        Сохранить модель и нормализатор (VecNormalize) по имени.
-
-        Создаются файлы:
-        - ``<name>_model.zip`` — модель PPO;
-        - ``<name>_vecnormalize.pkl`` — статистика нормализации;
-        - ``<name>_config.json`` — конфиги (для восстановления при load).
-        """
+        """Принимает имя и сохраняет модель с конфигурацией."""
         if self._model is None:
             raise RuntimeError("Нет модели для сохранения. Сначала вызовите train().")
 
@@ -165,16 +156,10 @@ class PPOController(Controller):
 
     @classmethod
     def load(cls, name: str) -> PPOController:
-        """
-        Загрузить модель и нормализатор (VecNormalize) по имени.
-
-        Восстанавливает конфиги из ``<name>_config.json``, модель из
-        ``<name>_model.zip`` и нормализатор из ``<name>_vecnormalize.pkl``
-        (если он был сохранён).
-        """
+        """Принимает имя и возвращает восстановленный PPO-контроллер."""
         config_path = f"{name}_config.json"
         if os.path.exists(config_path):
-            with open(config_path, "r", encoding="utf-8") as f:
+            with open(config_path, encoding="utf-8") as f:
                 payload = json.load(f)
 
             ppo_config = PPOConfig(**payload["ppo_config"])
@@ -204,31 +189,32 @@ class PPOController(Controller):
         vec_norm_path = f"{name}_vecnormalize.pkl"
         if os.path.exists(vec_norm_path):
             dummy_venv = DummyVecEnv(
-                [
-                    lambda: _DummyEnv(
-                        model.observation_space, model.action_space
-                    )
-                ]
+                [lambda: _DummyEnv(model.observation_space, model.action_space)]
             )
             obj._vec_normalize = VecNormalize.load(vec_norm_path, dummy_venv)
 
         return obj
 
-    def action(self,state_target: np.ndarray) -> np.ndarray:
+    def action(self, state_target: np.ndarray) -> np.ndarray:
+        """Принимает состояние с целью, возвращает действие политики PPO."""
         if self._model is None:
             raise RuntimeError("PPO-модель не загружена. Вызовите train() или load().")
-        
+
         if self._vec_normalize is not None:
             obs = self._vec_normalize.normalize_obs(state_target)
         else:
             obs = state_target
         actions, _ = self._model.predict(obs, deterministic=True)
-        return actions 
+        return actions
 
     def train(
-        self, env_orchestrator: EnvOrchestrator,
-        ) -> None:
-        vec_env = VecNormalize(env_orchestrator._env_hub, norm_obs=True, norm_reward=False)
+        self,
+        env_orchestrator: EnvOrchestrator,
+    ) -> None:
+        """Принимает оркестратор, обучает и периодически валидирует PPO-модель."""
+        vec_env = VecNormalize(
+            env_orchestrator._env_hub, norm_obs=True, norm_reward=False
+        )
         self._vec_normalize = vec_env
         if self._model is None:
             self._model = SB3_PPO(
@@ -244,7 +230,7 @@ class PPOController(Controller):
                 ent_coef=self._ppo_config.ent_coef,
                 vf_coef=self._ppo_config.vf_coef,
                 max_grad_norm=self._ppo_config.max_grad_norm,
-                policy_kwargs=dict(net_arch=self._ppo_config.net_arch),
+                policy_kwargs={"net_arch": self._ppo_config.net_arch},
                 verbose=1,
                 seed=self._ppo_config.seed,
             )

@@ -5,12 +5,11 @@ from packages.simulation.CO.datatypes import PlantConfig, SensorConfig
 
 
 class ObjectOfControl:
-    def __init__(
-        self, 
-        plant_config: PlantConfig,
-        sensor_config: SensorConfig
-        ) -> None:
-        self.__plant_config:PlantConfig = plant_config
+    """Объединяет физическую модель и блок измерения состояния."""
+
+    def __init__(self, plant_config: PlantConfig, sensor_config: SensorConfig) -> None:
+        """Принимает конфигурации растения и датчика, создаёт объект модели."""
+        self.__plant_config: PlantConfig = plant_config
         self._M: float = plant_config.M
         self._m1: float = plant_config.m1
         self._m2: float = plant_config.m2
@@ -77,9 +76,8 @@ class ObjectOfControl:
         """Вектор обобщённых скоростей ``[ẋ, θ̇₁, θ̇₂]``."""
         return self._dq.copy()
 
-    def update_physics(
-        self, F_ideal: float, n_updates: int
-    ) -> None:
+    def update_physics(self, F_ideal: float, n_updates: int) -> None:
+        """Принимает силу и число подшагов, обновляет состояние модели."""
         if _co_cpp is None:
             raise RuntimeError(
                 "C++ backend (co_cpp) is not available. "
@@ -98,18 +96,18 @@ class ObjectOfControl:
             self._motor_force,
             int(n_updates),
         )
+
     def get_telemetry(self) -> np.ndarray:
-        """
-        Получить измеренное состояние: берёт реальное состояние маятника,
-        применяет квантование и зашумление (реализация в C++-блоке датчиков).
-        """
+        """Возвращает состояние после квантования, шума и фильтрации датчика."""
         return self._cpp_sensor.get_telemetry(self._q, self._dq)
 
     def reset(self) -> None:
+        """Сбрасывает координаты, скорости, силу двигателя и датчики."""
         self._q = self.__plant_config.init_q()
         self._dq = self.__plant_config.init_dq()
         self._motor_force = 0.0
         self._cpp_sensor.reset()
 
     def get_clean_state(self) -> np.ndarray:
+        """Возвращает объединённый вектор истинных координат и скоростей."""
         return np.concatenate((self._q, self._dq))

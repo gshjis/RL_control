@@ -25,7 +25,7 @@ SUBTICKS = int(PHYSICS_DT / 0.005)
 
 # --- Target marker defaults ---
 # Цвет маркера цели (по умолчанию серый) и при hover
-MARKER_COLOR = (0, 200, 0)      # green token
+MARKER_COLOR = (0, 200, 0)  # green token
 MARKER_HOVER_COLOR = (0, 160, 0)
 # Скорость перемещения маркера (ед./с, в единицах координат) — по умолчанию 100
 MARKER_SPEED = 100.0
@@ -44,10 +44,10 @@ FORCE_PER_FRAME = 8.0
 # --- Графики (правый верхний угол) ---
 SINE_GRAPH_W = 480
 SINE_GRAPH_H = 150
-SINE_GRAPH_X = WIDTH - SINE_GRAPH_W - 30   # 1200 - 480 - 30 = 690
+SINE_GRAPH_X = WIDTH - SINE_GRAPH_W - 30  # 1200 - 480 - 30 = 690
 SINE_GRAPH_Y = 50
-SINE_COLOR = (0, 200, 255)      # cyan — sin(θ₁)
-SINE_COLOR2 = (255, 180, 30)    # orange — sin(θ₂)
+SINE_COLOR = (0, 200, 255)  # cyan — sin(θ₁)
+SINE_COLOR2 = (255, 180, 30)  # orange — sin(θ₂)
 SINE_BG = (15, 15, 25)
 SINE_GRID = (40, 40, 50)
 
@@ -55,6 +55,6 @@ ERR_GRAPH_X = SINE_GRAPH_X
 ERR_GRAPH_Y = SINE_GRAPH_Y + SINE_GRAPH_H + 15
 ERR_GRAPH_W = SINE_GRAPH_W
 ERR_GRAPH_H = 100
-ERR_COLOR = (255, 100, 100)      # red — ошибка по X
+ERR_COLOR = (255, 100, 100)  # red — ошибка по X
 ERR_BG = (25, 15, 15)
 ERR_GRID = (50, 30, 30)

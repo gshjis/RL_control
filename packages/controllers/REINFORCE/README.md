@@ -35,8 +35,8 @@ from packages.controllers.REINFORCE.reinforce import Reinforce
 from packages.controllers.REINFORCE.mode_config import ReinforceNetworkConfig
 
 net_cfg = ReinforceNetworkConfig(
-    state_dim=12,          # s_clean (6) + target_state (6)
-    action_dim=1,          # сила F
+    state_dim=12,  # s_clean (6) + target_state (6)
+    action_dim=1,  # сила F
     hidden_layers=[64, 64],
     learning_rate=1e-4,
 )

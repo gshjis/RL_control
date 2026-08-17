@@ -84,8 +84,12 @@ $$J(target, measured) = \|target - measured\|^2$$
 ```python
 import numpy as np
 from packages.simulation.CO import (
-    PlantConfig, SensorConfig, ControllerConfig, NoiseForce,
-    ObjectOfControl, SensorBlock,
+    PlantConfig,
+    SensorConfig,
+    ControllerConfig,
+    NoiseForce,
+    ObjectOfControl,
+    SensorBlock,
 )
 from packages.controllers.PID import PIDController, terminate_condition
 from packages.controllers.PID.optimizers import Zigler_Nikols, Genetic_PID_AngleOnly

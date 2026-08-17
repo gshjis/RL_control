@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -8,12 +7,15 @@ import numpy as np
 
 @dataclass
 class NoiseForce:
+    """Хранит среднее и СКО внешнего силового шума."""
+
     mean: float = 0.0
     std: float = 0.0
 
 
 @dataclass
 class PlantConfig:
+    """Хранит параметры физической модели маятника."""
 
     M: float = 1.0
     m1: float = 0.3
@@ -29,39 +31,42 @@ class PlantConfig:
     single_pendulum_mode: bool = True
     motor_time_constant: float = 0.0
 
-    init_q_stats: np.ndarray = field(default_factory=lambda: np.array([[0.0, np.pi, 0.0], [0.1, 0.1, 0.0]]))
-    init_dq_stats: np.ndarray = field(default_factory=lambda: np.array([[0.0, 0.0, 0.0], [0.1, 0.1, 0.0]]))
+    init_q_stats: np.ndarray = field(
+        default_factory=lambda: np.array([[0.0, np.pi, 0.0], [0.1, 0.1, 0.0]])
+    )
+    init_dq_stats: np.ndarray = field(
+        default_factory=lambda: np.array([[0.0, 0.0, 0.0], [0.1, 0.1, 0.0]])
+    )
     dt: float = 0.0005
 
-    mean_f:float = 0
-    std_f:float = 0.02
+    mean_f: float = 0
+    std_f: float = 0.02
 
     L1: float = field(init=False)
     L2: float = field(init=False)
     J1: float = field(init=False)
     J2: float = field(init=False)
 
-
     def __post_init__(self) -> None:
+        """Вычисляет производные геометрические и инерционные параметры."""
         object.__setattr__(self, "L1", self.l1 / 2.0)
         object.__setattr__(self, "L2", self.l2 / 2.0)
         object.__setattr__(self, "J1", (1.0 / 12.0) * self.m1 * self.l1**2)
         object.__setattr__(self, "J2", (1.0 / 12.0) * self.m2 * self.l2**2)
 
     def init_q(self) -> np.ndarray:
-        """Sample an initial position from the lower/upward 50/50 mixture.
-
-        With the simulator's angle convention, ``theta1 = 0`` is the lower
-        position and ``theta1 = pi`` is the upright position. The remaining
-        coordinates retain the configured Gaussian initialization.
-        """
+        """Принимает настройки распределения и возвращает начальные координаты."""
         t = np.random.normal(self.init_q_stats[0], self.init_q_stats[1])
         t[1] = np.pi if np.random.randint(0, 2) else 0.0
         return t
+
     def init_dq(self) -> np.ndarray:
+        """Возвращает начальные скорости из заданного нормального распределения."""
         t = np.random.normal(self.init_dq_stats[0], self.init_dq_stats[1])
         return t
+
     def to_dict(self) -> dict:
+        """Возвращает конфигурацию в виде словаря сериализуемых значений."""
         return {
             "M": self.M,
             "m1": self.m1,
@@ -80,18 +85,11 @@ class PlantConfig:
             "motor_time_constant": self.motor_time_constant,
             "init_q": self.init_q().tolist(),
             "init_dq": self.init_dq().tolist(),
-            "dt": self.dt
+            "dt": self.dt,
         }
 
     def copy(self) -> PlantConfig:
-        """
-        Создать глубокую копию конфигурации.
-
-        Returns
-        -------
-        PlantConfig
-            Независимая копия со своими массивами ``init_q`` / ``init_dq``.
-        """
+        """Возвращает независимую копию конфигурации растения."""
         return PlantConfig(
             M=self.M,
             m1=self.m1,
@@ -112,6 +110,7 @@ class PlantConfig:
 
 @dataclass
 class SensorConfig:
+    """Хранит параметры разрешения, шума и фильтрации датчиков."""
 
     encoder_resolution_1: int = 4096
     encoder_resolution_2: int = 4096
@@ -134,6 +133,7 @@ class SensorConfig:
     filter_cutoff_hz: float = 50.0
 
     def to_dict(self) -> dict:
+        """Возвращает конфигурацию датчиков в виде словаря."""
         return {
             "encoder_resolution_1": self.encoder_resolution_1,
             "encoder_resolution_2": self.encoder_resolution_2,
@@ -149,6 +149,7 @@ class SensorConfig:
 
 @dataclass
 class ControllerConfig:
+    """Хранит параметры шага, силы и фильтров контроллера."""
 
     dt: float = 0.005
     max_force: float = 30.0
@@ -157,6 +158,7 @@ class ControllerConfig:
     filter_cutoff_hz: float = 50.0
 
     def to_dict(self) -> dict:
+        """Возвращает конфигурацию контроллера в виде словаря."""
         return {
             "dt": self.dt,
             "max_force": self.max_force,

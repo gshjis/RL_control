@@ -37,6 +37,29 @@ priority = "explicit"
 [tool.poetry.group.dev.dependencies]
 mlflow = "^3.13.0"
 ipykernel = "^7.3.0"
+ruff = "^0.16.3"
+mypy = "^2.3.1"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+exclude = [".venv", "recordings", "output.mp4"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "N", "SIM", "C4"]
+ignore = ["N801", "N802", "N803", "N806", "N812", "N999"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.mypy]
+python_version = "3.12"
+explicit_package_bases = true
+ignore_missing_imports = true
+check_untyped_defs = true
+exclude = "(^|/)(\\.venv|recordings)/"
 
 [build-system]
 requires = ["poetry-core"]
