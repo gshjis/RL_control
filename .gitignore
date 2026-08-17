@@ -7,6 +7,7 @@ __pycache__
 
 # Temporary venv used during experimentation
 venv_tmp
+recordings
 
 # C++ extension build artifacts (pybind11 via CMake)
 packages/simulation/co/cpp/build/
@@ -23,7 +24,6 @@ reinforce_models
 .venv
 
 # Generated media and image artifacts
-*.gif
 *.png
 *.jpg
 *.jpeg
