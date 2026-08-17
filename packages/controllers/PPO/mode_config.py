@@ -7,18 +7,20 @@ class PPOConfig:
     """Конфигурация гиперпараметров PPO-алгоритма."""
 
     policy: str = "MlpPolicy"
-    net_arch: list[int] = field(default_factory=lambda: [64, 64, 64])
+    net_arch: list[int] = field(default_factory=lambda: [64, 64])
 
     learning_rate: float = 3e-4
-    n_steps: int = 4096
-    batch_size: int = 64
+    n_steps: int = 2048
+    batch_size: int = 256
     n_epochs: int = 8                  
     
-    gamma: float = 0.99
-    gae_lambda: float = 0.95
+    # Swing-up takes several controller ticks, so use a longer planning
+    # horizon than the default 0.99 discount.
+    gamma: float = 0.999
+    gae_lambda: float = 0.97
     
-    clip_range: float = 0.15          
-    ent_coef: float = 0.05            
+    clip_range: float = 0.2
+    ent_coef: float = 0.05
     
     vf_coef: float = 0.5
     max_grad_norm: float = 0.5

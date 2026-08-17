@@ -9,19 +9,16 @@ from packages.simulation.CO import (
 )
 
 ppo_config = PPOConfig(
-    total_timesteps=600_000,
+    total_timesteps=3_500_000,
     eval_freq=100_000,
     n_eval_episodes=2,
     max_episode_steps=2_000,
 )
 
-# Начальное состояние задаётся распределением: матрица 2×3 
-# (строка 0 — средние, строка 1 — СКО для каждой координаты).
-# init_q() / init_dq() возвращают сэмпл из N(mean, std).
 PLANT_CONFIG = PlantConfig(
     M=1.0,
-    m1=0.1,
-    l1=0.3,
+    m1=0.05,
+    l1=0.2,
     m2=0.0,
     l2=0.0,
     g=-9.81,
@@ -30,11 +27,12 @@ PLANT_CONFIG = PlantConfig(
     b_2=0.001,
     single_pendulum_mode=True,
     init_q_stats=np.array([
-        [0.0, np.pi, 0.0], 
-        [0.01, 0.02, 0.0]]),
+        # Swing-up starts near the stable downward position theta=0.
+        [0.0, np.pi, 0.0],
+        [0.01, 0.00, 0.01]]),
     init_dq_stats=np.array([
         [0.0, 0.0, 0.0], 
-        [0.0, 0.05, 0.0]]),
+        [0.0, 0.00, 0.01]]),
     dt=0.001,
     motor_time_constant=0.01,
 )
@@ -58,4 +56,5 @@ NOISE = NoiseForce(mean=0.00, std=0.03)
 
 
 def target(time: float) -> np.ndarray:
-    return np.array([0.0, -1.0, 0.0, 0.0, 0.0, 0.0])
+    # x=0, first link upright (theta1=pi), second link aligned (theta2=0).
+    return np.array([0.0, -1.0, 0.0, 1.0, 0.0, 0.0])

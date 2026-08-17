@@ -14,10 +14,31 @@ import numpy as np
 
 
 def terminate_condition(state:np.ndarray, target:np.ndarray) -> bool:
-    return state[1] > -0.95
+    """Terminate only on an unrecoverable cart or numerical failure.
 
-def reward_f(state: np.ndarray, target: np.ndarray, f: float) -> float:
-    return np.exp(-(state[1]))
+    A fast pass through the upright position is not terminal during swing-up;
+    the agent must be allowed to learn how to remove that angular velocity.
+    """
+    del target
+    return abs(float(state[0])) > 0.5 or not np.all(np.isfinite(state))
+
+def reward_f(state: np.ndarray, target: np.ndarray) -> float:
+    """Return the simplified mechanical energy of the pendulum link only."""
+    del target
+
+    cos_theta1 = float(state[1])
+    dtheta1 = float(state[6])
+
+    # Energy of the first link only. The cart energy and the cart-pendulum
+    # coupling are intentionally excluded. Parameters come from PLANT_CONFIG.
+    m1 = float(PLANT_CONFIG.m1)
+    L1 = float(PLANT_CONFIG.L1)
+    J1 = float(PLANT_CONFIG.J1)
+    gravity = abs(float(PLANT_CONFIG.g))
+    inertia_about_pivot = J1 + m1 * L1 * L1
+    kinetic_energy = 0.5 * inertia_about_pivot * dtheta1 * dtheta1
+    potential_energy = m1 * gravity * L1 * (1.0 - cos_theta1)
+    return float(kinetic_energy + potential_energy)
     
 def truncated_condition(state:np.ndarray, target:np.ndarray) -> bool:
     return False
@@ -37,7 +58,8 @@ if __name__ == "__main__":
         10,
         CONTROLLER_CONFIG,
         truncated_condition,
-        target
+        target,
+        ppo_config.max_episode_steps,
         )
 
     print("Обучение PPO...")

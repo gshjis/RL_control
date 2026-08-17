@@ -20,7 +20,6 @@ class PlantConfig:
     m2: float = 0.0
     l1: float = 1.0
     l2: float = 0.0
-    # Signed gravity convention used by the C++ dynamics: g < 0.
     g: float = -9.81
 
     b_c: float = 0.0
@@ -50,7 +49,14 @@ class PlantConfig:
         object.__setattr__(self, "J2", (1.0 / 12.0) * self.m2 * self.l2**2)
 
     def init_q(self) -> np.ndarray:
+        """Sample an initial position from the lower/upward 50/50 mixture.
+
+        With the simulator's angle convention, ``theta1 = 0`` is the lower
+        position and ``theta1 = pi`` is the upright position. The remaining
+        coordinates retain the configured Gaussian initialization.
+        """
         t = np.random.normal(self.init_q_stats[0], self.init_q_stats[1])
+        t[1] = np.pi if np.random.randint(0, 2) else 0.0
         return t
     def init_dq(self) -> np.ndarray:
         t = np.random.normal(self.init_dq_stats[0], self.init_dq_stats[1])

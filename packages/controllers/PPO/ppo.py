@@ -239,6 +239,11 @@ class PPOController(Controller):
                 batch_size=self._ppo_config.batch_size,
                 n_epochs=self._ppo_config.n_epochs,
                 gamma=self._ppo_config.gamma,
+                gae_lambda=self._ppo_config.gae_lambda,
+                clip_range=self._ppo_config.clip_range,
+                ent_coef=self._ppo_config.ent_coef,
+                vf_coef=self._ppo_config.vf_coef,
+                max_grad_norm=self._ppo_config.max_grad_norm,
                 policy_kwargs=dict(net_arch=self._ppo_config.net_arch),
                 verbose=1,
                 seed=self._ppo_config.seed,
@@ -248,7 +253,9 @@ class PPOController(Controller):
         eval_env = VecNormalize(
             DummyVecEnv([env_orchestrator._make_env]),
             norm_obs=True,
-            norm_reward=True,
+            # Keep validation rewards raw so mean_reward reflects the actual
+            # reward function instead of VecNormalize's running statistics.
+            norm_reward=False,
         )
         eval_callback = ValidationCallback(
             eval_env=eval_env,

@@ -26,6 +26,11 @@ from packages.simulation.ENV.env import PendulumEnv
 from packages.simulation.GUI import PendulumViewer
 from PPO_train import *
 
+# Validation checkpoint used by the GUI. This explicitly overrides the
+# training output name imported from PPO_train.py.
+PROJECT_ROOT = Path(__file__).resolve().parent
+MODEL_NAME = str(PROJECT_ROOT / "checkpoints/ppo/validation/model_1900000")
+
 # ── Конфигурация ─────────────────────────────────────────────────────────
 
 SENSOR_CONFIG = SensorConfig(
@@ -45,9 +50,6 @@ CONTROLLER_CONFIG = ControllerConfig(
 
 TARGET = np.array([0.0, 1, 0.0, 0.0, 0.0, 0.0])
 
-# Имя (базовое) сохранённой модели — должно совпадать с MODEL_NAME в PPO_train.py.
-
- 
 def main() -> None:
     # ── Среда ────────────────────────────────────────────────────────────
     env = PendulumEnv(
@@ -62,7 +64,6 @@ def main() -> None:
 
     # ── Контроллер (если есть предобученная модель) ─────────────────────
     controller = None
-    MODEL_NAME = "checkpoints/ppo/validation/model_400000"
     if Path(f"{MODEL_NAME}.zip").exists():
         controller = PPOController.load(MODEL_NAME)
         print(f"Загружена модель: {MODEL_NAME}")

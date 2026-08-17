@@ -18,11 +18,13 @@ class EnvOrchestrator:
         n_simulations: int,
         controller_config:ControllerConfig,
         truncated_condition:Callable[[np.ndarray, np.ndarray], bool],
-        target: Callable[[float], np.ndarray]
+        target: Callable[[float], np.ndarray],
+        max_episode_steps: int = 2_000,
     ):
         self._truncated_condition:Callable[[np.ndarray,np.ndarray], bool] = truncated_condition
         self._target:Callable[[float], np.ndarray] = target
         self._controller_config:ControllerConfig = controller_config
+        self._max_episode_steps = int(max_episode_steps)
         self._plant_config = plant_config
         self._sensor_config = sensor_config
         self._cost_function = cost_function
@@ -44,6 +46,7 @@ class EnvOrchestrator:
             self._terminate_condition,
             self._controller_config,
             self._target,
-            self._truncated_condition
+            self._truncated_condition,
+            self._max_episode_steps,
         )
     
