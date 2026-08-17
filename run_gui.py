@@ -7,13 +7,13 @@ from pathlib import Path
 import numpy as np
 
 from configs import PLANT_CONFIG, target
-from packages.controllers.PPO import PPOController
-from packages.simulation.CO import (
+from packages.controllers.ppo import PPOController
+from packages.simulation.co import (
     ControllerConfig,
     SensorConfig,
 )
-from packages.simulation.ENV.env import PendulumEnv
-from packages.simulation.GUI import PendulumViewer
+from packages.simulation.env.env import PendulumEnv
+from packages.simulation.gui import PendulumViewer
 from PPO_train import reward_f, terminate_condition, truncated_condition
 
 # Validation checkpoint used by the GUI. This explicitly overrides the

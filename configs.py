@@ -1,7 +1,7 @@
 import numpy as np
 
-from packages.controllers.PPO import PPOConfig
-from packages.simulation.CO import (
+from packages.controllers.ppo import PPOConfig
+from packages.simulation.co import (
     ControllerConfig,
     NoiseForce,
     PlantConfig,

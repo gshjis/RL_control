@@ -4,11 +4,11 @@ from collections.abc import Callable
 from typing import Any
 
 import numpy as np
+from base import Controller
 from loggers import Logger
+from pid import PIDController
 
-from packages.controllers.PID.pid import PIDController
-from packages.simulation.CO import (
-    Controller,
+from packages.simulation.co import (
     ControllerConfig,
     NoiseForce,
     ObjectOfControl,

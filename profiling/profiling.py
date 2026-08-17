@@ -5,7 +5,7 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 
-from packages.simulation.CO import ObjectOfControl, PlantConfig, SensorConfig
+from packages.simulation.co import ObjectOfControl, PlantConfig, SensorConfig
 
 
 def simulate_fall(

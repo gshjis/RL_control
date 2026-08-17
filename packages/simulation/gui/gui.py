@@ -13,8 +13,8 @@ from typing import Any
 import numpy as np
 import pygame
 
-from packages.simulation.ENV.env import PendulumEnv
-from packages.simulation.GUI import constants as C
+from packages.simulation.env.env import PendulumEnv
+from packages.simulation.gui import constants as C
 
 
 class PendulumViewer:

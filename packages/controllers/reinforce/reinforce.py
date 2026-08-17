@@ -6,13 +6,13 @@ from typing import Any
 
 import numpy as np
 import torch
-from controller import Controller
+from base import Controller
 from datatypes import ControllerConfig
 from loggers import Logger
 from torch import nn
 
-from packages.controllers.REINFORCE.mode_config import ReinforceNetworkConfig
-from packages.simulation.CO import (
+from packages.controllers.reinforce.mode_config import ReinforceNetworkConfig
+from packages.simulation.co import (
     NoiseForce,
     ObjectOfControl,
     PlantConfig,

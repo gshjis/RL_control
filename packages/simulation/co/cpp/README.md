@@ -24,17 +24,17 @@
   ```
 
 Сборка использует Python из корневого poetry-окружения,
-**не требует** создания отдельного `.venv` внутри `packages/simulation/CO/`.
+**не требует** создания отдельного `.venv` внутри `packages/simulation/co/`.
 
 ## Сборка
 
 Используйте **внешнее виртуальное окружение из корня проекта** (`.venv`),
-не создавайте новое внутри `packages/simulation/CO/`. Из **корня проекта**
+не создавайте новое внутри `packages/simulation/co/`. Из **корня проекта**
 (`/home/gshjis/Python_projects/RL`):
 
 ```bash
 # 1. Подготовить build-директорию
-cd packages/simulation/CO/cpp
+cd packages/simulation/co/cpp
 rm -rf build
 mkdir build && cd build
 
@@ -51,14 +51,14 @@ cmake --build . -j "$(nproc)"
 настроен на вывод в каталог пакета, копировать вручную не нужно):
 
 ```
-packages/simulation/CO/co_cpp.so
+packages/simulation/co/co_cpp.so
 ```
 
 ## Проверка
 
 ```bash
 poetry run python -c "
-from packages.simulation.CO import co_cpp as m
+from packages.simulation.co import co_cpp as m
 print('C++ backend OK:', m)
 print('Functions:', [f for f in dir(m) if not f.startswith('_')])
 "
@@ -66,7 +66,7 @@ print('Functions:', [f for f in dir(m) if not f.startswith('_')])
 
 Ожидаемый вывод:
 ```
-C++ backend OK: <module 'co_cpp' from '.../packages/simulation/CO/co_cpp.so'>
+C++ backend OK: <module 'co_cpp' from '.../packages/simulation/co/co_cpp.so'>
 Functions: ['Differentiator', 'NoiseForce', 'PlantParams', 'SensorBlock',
            'SignalFilter', 'State3', 'StateDot3',
            'rk4_step', 'update_physics_cpp']
@@ -83,7 +83,7 @@ Functions: ['Differentiator', 'NoiseForce', 'PlantParams', 'SensorBlock',
 ## Быстрая пересборка (если build уже настроен)
 
 ```bash
-cd packages/simulation/CO/cpp/build
+cd packages/simulation/co/cpp/build
 cmake --build . -j "$(nproc)"
 ```
 

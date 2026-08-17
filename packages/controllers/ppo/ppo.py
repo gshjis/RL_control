@@ -7,6 +7,7 @@ from typing import cast
 
 import gymnasium as gym
 import numpy as np
+from base import Controller
 from stable_baselines3 import PPO as SB3_PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import (
@@ -16,12 +17,11 @@ from stable_baselines3.common.vec_env import (
     sync_envs_normalization,
 )
 
-from packages.controllers.PPO.mode_config import PPOConfig
-from packages.simulation.CO import (
-    Controller,
+from packages.controllers.ppo.mode_config import PPOConfig
+from packages.simulation.co import (
     ControllerConfig,
 )
-from packages.simulation.ENV.env_orcestrator import EnvOrchestrator
+from packages.simulation.env.env_orcestrator import EnvOrchestrator
 
 
 class ValidationCallback(BaseCallback):

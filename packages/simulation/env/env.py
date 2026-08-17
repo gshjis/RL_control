@@ -8,8 +8,8 @@ import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
 
-from packages.simulation.CO.datatypes import ControllerConfig, PlantConfig, SensorConfig
-from packages.simulation.CO.pendulum import ObjectOfControl
+from packages.simulation.co.datatypes import ControllerConfig, PlantConfig, SensorConfig
+from packages.simulation.co.pendulum import ObjectOfControl
 
 
 class PendulumEnv(gym.Env):

@@ -7,8 +7,8 @@ from __future__ import annotations
 import numpy as np
 
 from configs import CONTROLLER_CONFIG, PLANT_CONFIG, SENSOR_CONFIG, ppo_config, target
-from packages.controllers.PPO import PPOController
-from packages.simulation.ENV import env_orcestrator
+from packages.controllers.ppo import PPOController
+from packages.simulation.env import env_orcestrator
 
 MODEL_NAME = "checkpoints/ppo/pendl"
 

@@ -1,7 +1,7 @@
 import numpy as np
-import packages.simulation.CO.co_cpp as _co_cpp
+import packages.simulation.co.co_cpp as _co_cpp
 
-from packages.simulation.CO.datatypes import PlantConfig, SensorConfig
+from packages.simulation.co.datatypes import PlantConfig, SensorConfig
 
 
 class ObjectOfControl:

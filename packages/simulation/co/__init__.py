@@ -1,4 +1,3 @@
-from .controller import Controller
 from .datatypes import (
     ControllerConfig,
     NoiseForce,
@@ -9,7 +8,6 @@ from .pendulum import ObjectOfControl
 
 __all__ = [
     # controller
-    "Controller",
     "ControllerConfig",
     # datatypes
     "NoiseForce",

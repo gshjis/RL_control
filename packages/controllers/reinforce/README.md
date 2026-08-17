@@ -21,7 +21,7 @@ $$\pi_\theta(a|s) = \mathcal{N}(\mu_\theta(s), \sigma_\theta(s))$$
 
 ## Зависимости
 
-- `packages/simulation/CO` — контроллер, физика, датчики, такт управления
+- `packages/simulation/co` — контроллер, физика, датчики, такт управления
 - `torch ≥ 2.4` — нейросеть и оптимизатор
 
 ---
@@ -30,9 +30,9 @@ $$\pi_\theta(a|s) = \mathcal{N}(\mu_\theta(s), \sigma_\theta(s))$$
 
 ```python
 import numpy as np
-from packages.simulation.CO.datatypes import *
-from packages.controllers.REINFORCE.reinforce import Reinforce
-from packages.controllers.REINFORCE.mode_config import ReinforceNetworkConfig
+from packages.simulation.co.datatypes import *
+from packages.controllers.reinforce.reinforce import Reinforce
+from packages.controllers.reinforce.mode_config import ReinforceNetworkConfig
 
 net_cfg = ReinforceNetworkConfig(
     state_dim=12,  # s_clean (6) + target_state (6)

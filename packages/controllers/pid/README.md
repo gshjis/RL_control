@@ -15,7 +15,7 @@
 - **`Genetic_PID_AngleOnly`** — генетический алгоритм для подбора Kp/Ki/Kd
 - **`J()`** — квадратичная целевая функция (сумма квадратов ошибок)
 
-Пакет зависит от `packages/simulation/CO` (Controller, clock_cycle, ...).
+Пакет зависит от `packages/simulation/co` (Controller, clock_cycle, ...).
 
 ---
 
@@ -83,7 +83,7 @@ $$J(target, measured) = \|target - measured\|^2$$
 
 ```python
 import numpy as np
-from packages.simulation.CO import (
+from packages.simulation.co import (
     PlantConfig,
     SensorConfig,
     ControllerConfig,
@@ -91,8 +91,8 @@ from packages.simulation.CO import (
     ObjectOfControl,
     SensorBlock,
 )
-from packages.controllers.PID import PIDController, terminate_condition
-from packages.controllers.PID.optimizers import Zigler_Nikols, Genetic_PID_AngleOnly
+from packages.controllers.pid import PIDController, terminate_condition
+from packages.controllers.pid.optimizers import Zigler_Nikols, Genetic_PID_AngleOnly
 
 # Конфигурации
 plant_cfg = PlantConfig()

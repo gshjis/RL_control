@@ -2,19 +2,19 @@
 
 Краткое описание
 
-Пакет GUI предоставляет простую обёртку для визуализации и управления симуляцией из подпакета [`packages/simulation/CO`](packages/simulation/CO/controller.py:1). Основные компоненты расположены в модулях:
+Пакет GUI предоставляет простую обёртку для визуализации и управления симуляцией из подпакета [`packages/simulation/co`](packages/simulation/co/controller.py:1). Основные компоненты расположены в модулях:
 
-- [`packages/simulation/GUI/gui.py`](packages/simulation/GUI/gui.py:1) — главный входной модуль для запуска окна и инициализации подсистем.
-- [`packages/simulation/GUI/renderer.py`](packages/simulation/GUI/renderer.py:1) — визуализация сцен и объектов.
-- [`packages/simulation/GUI/input_handling.py`](packages/simulation/GUI/input_handling.py:1) — обработка ввода пользователя.
-- [`packages/simulation/GUI/physics_runner.py`](packages/simulation/GUI/physics_runner.py:1) — цикл физики / шаг симуляции.
-- [`packages/simulation/GUI/event_controller.py`](packages/simulation/GUI/event_controller.py:1) — управление событиями и взаимодействие между подсистемами.
-- Дополнительно: [`packages/simulation/GUI/dialogs.py`](packages/simulation/GUI/dialogs.py:1), [`packages/simulation/GUI/recorder.py`](packages/simulation/GUI/recorder.py:1), [`packages/simulation/GUI/draw.py`](packages/simulation/GUI/draw.py:1), [`packages/simulation/GUI/constants.py`](packages/simulation/GUI/constants.py:1).
+- [`packages/simulation/gui/gui.py`](packages/simulation/gui/gui.py:1) — главный входной модуль для запуска окна и инициализации подсистем.
+- [`packages/simulation/gui/renderer.py`](packages/simulation/gui/renderer.py:1) — визуализация сцен и объектов.
+- [`packages/simulation/gui/input_handling.py`](packages/simulation/gui/input_handling.py:1) — обработка ввода пользователя.
+- [`packages/simulation/gui/physics_runner.py`](packages/simulation/gui/physics_runner.py:1) — цикл физики / шаг симуляции.
+- [`packages/simulation/gui/event_controller.py`](packages/simulation/gui/event_controller.py:1) — управление событиями и взаимодействие между подсистемами.
+- Дополнительно: [`packages/simulation/gui/dialogs.py`](packages/simulation/gui/dialogs.py:1), [`packages/simulation/gui/recorder.py`](packages/simulation/gui/recorder.py:1), [`packages/simulation/gui/draw.py`](packages/simulation/gui/draw.py:1), [`packages/simulation/gui/constants.py`](packages/simulation/gui/constants.py:1).
 
 Требования
 
-- Python 3.8+ (проверьте [`packages/simulation/GUI/pyproject.toml`](packages/simulation/GUI/pyproject.toml:1)).
-- Зависимости проекта указаны в корневом `pyproject.toml` и/или в [`packages/simulation/GUI/pyproject.toml`](packages/simulation/GUI/pyproject.toml:1).
+- Python 3.8+ (проверьте [`packages/simulation/gui/pyproject.toml`](packages/simulation/gui/pyproject.toml:1)).
+- Зависимости проекта указаны в корневом `pyproject.toml` и/или в [`packages/simulation/gui/pyproject.toml`](packages/simulation/gui/pyproject.toml:1).
 - Рекомендуется запускать в виртуальном окружении (venv, poetry, pipenv).
 
 Установка
@@ -40,14 +40,14 @@
 
 Если в вашем проекте есть прямой запуск GUI через модуль, можно запустить напрямую:
 
-   python -m packages.simulation.GUI.gui
+   python -m packages.simulation.gui.gui
 
 Пример кода (псевдо):
 
-- В [`packages/simulation/GUI/gui.py`](packages/simulation/GUI/gui.py:1) ожидается функция/класс, создающий окно и стартующий цикл:
+- В [`packages/simulation/gui/gui.py`](packages/simulation/gui/gui.py:1) ожидается функция/класс, создающий окно и стартующий цикл:
 
-   from packages.simulation.CO.controller import Controller  # пример
-   from packages.simulation.GUI.gui import GUI  # предположение
+   from packages.simulation.co.controller import Controller  # пример
+   from packages.simulation.gui.gui import GUI  # предположение
 
    controller = Controller(...)
    gui = GUI(controller)
@@ -56,7 +56,7 @@
 Полезные проверки при запуске
 
 - Проверьте логи в терминале на наличие ошибок импорта модулей.
-- Если GUI не открывается, убедитесь, что зависимости для графики (например, pygame, pyglet и т.п.) установлены — посмотреть в [`packages/simulation/GUI/pyproject.toml`](packages/simulation/GUI/pyproject.toml:1).
+- Если GUI не открывается, убедитесь, что зависимости для графики (например, pygame, pyglet и т.п.) установлены — посмотреть в [`packages/simulation/gui/pyproject.toml`](packages/simulation/gui/pyproject.toml:1).
 
 Дальнейшие итерации
 
@@ -73,26 +73,26 @@
 Конец черновика README.
 
 
-Архитектура и логика модулей (акцент на [`packages/simulation/GUI/gui.py`](packages/simulation/GUI/gui.py:46))
+Архитектура и логика модулей (акцент на [`packages/simulation/gui/gui.py`](packages/simulation/gui/gui.py:46))
 
 Ниже кратко описана внутренняя логика `PendulumViewer` и как он связывает остальные модули пакета.
 
 - Инициализация (конструктор)
-  - Класс `PendulumViewer` определён в [`packages/simulation/GUI/gui.py`](packages/simulation/GUI/gui.py:46). При создании он сохраняет ссылки на:
-    - объект физики `plant` (тип [`packages/simulation/CO/ObjectOfControl`](packages/simulation/CO/controller.py:1)),
+  - Класс `PendulumViewer` определён в [`packages/simulation/gui/gui.py`](packages/simulation/gui/gui.py:46). При создании он сохраняет ссылки на:
+    - объект физики `plant` (тип [`packages/simulation/co/ObjectOfControl`](packages/simulation/co/controller.py:1)),
     - конфигурацию сенсора `sensor_config` и создаёт `SensorBlock`,
     - объект помех `NoiseForce`,
     - опциональный `Controller` (если `None` — используется ручное управление через клавиши),
     - целевое состояние `target_state` для вычисления ошибки управления.
   - Инициализируются подсистемы GUI:
-    - `EventController` — обработка событий и действий пользователя (`poll()` возвращает словарь действий), см. [`packages/simulation/GUI/event_controller.py`](packages/simulation/GUI/event_controller.py:1).
-    - `PhysicsRunner` — обёртка над пошаговым интегратором физики, используется для выполнения нескольких мелких шагов за один такт управления, см. [`packages/simulation/GUI/physics_runner.py`](packages/simulation/GUI/physics_runner.py:1).
-    - `Renderer` — ответственный за отрисовку сцены и HUD; получает экран и шрифт, вызывается в методе `_draw`, см. [`packages/simulation/GUI/renderer.py`](packages/simulation/GUI/renderer.py:1).
-    - `Recorder` / `recorder_obj` — сборка кадров и компиляция видео, см. [`packages/simulation/GUI/recorder_obj.py`](packages/simulation/GUI/recorder_obj.py:1) и [`packages/simulation/GUI/recorder.py`](packages/simulation/GUI/recorder.py:1).
+    - `EventController` — обработка событий и действий пользователя (`poll()` возвращает словарь действий), см. [`packages/simulation/gui/event_controller.py`](packages/simulation/gui/event_controller.py:1).
+    - `PhysicsRunner` — обёртка над пошаговым интегратором физики, используется для выполнения нескольких мелких шагов за один такт управления, см. [`packages/simulation/gui/physics_runner.py`](packages/simulation/gui/physics_runner.py:1).
+    - `Renderer` — ответственный за отрисовку сцены и HUD; получает экран и шрифт, вызывается в методе `_draw`, см. [`packages/simulation/gui/renderer.py`](packages/simulation/gui/renderer.py:1).
+    - `Recorder` / `recorder_obj` — сборка кадров и компиляция видео, см. [`packages/simulation/gui/recorder_obj.py`](packages/simulation/gui/recorder_obj.py:1) и [`packages/simulation/gui/recorder.py`](packages/simulation/gui/recorder.py:1).
 
 - Главный цикл (`use()`)
-  - Запуск через `PendulumViewer.use()` в [`packages/simulation/GUI/gui.py`](packages/simulation/GUI/gui.py:114). Метод блокирует и выполняет:
-    1. Предложение начать запись через диалог `ask_recording` ([`packages/simulation/GUI/dialogs.py`](packages/simulation/GUI/dialogs.py:1)).
+  - Запуск через `PendulumViewer.use()` в [`packages/simulation/gui/gui.py`](packages/simulation/gui/gui.py:114). Метод блокирует и выполняет:
+    1. Предложение начать запись через диалог `ask_recording` ([`packages/simulation/gui/dialogs.py`](packages/simulation/gui/dialogs.py:1)).
     2. Цикл обработки событий: получает `actions = self._event_controller.poll()`; если в `actions` содержится `running=False` — цикл завершается.
     3. Обработка переключения записи (`toggle_record`) и сохранения кадров через `pygame.image.save` и последующая компиляция `compile_video`.
     4. Чтение состояния клавиш (ESC/Q для выхода, SPACE для сброса, стрелки для ручного управления).
@@ -113,14 +113,14 @@
   - После остановки записи или завершения симуляции вызывается `compile_video` из `recorder.py` для сборки mp4 (в коде предусмотрлена попытка вызвать ffmpeg).
 
 - Сброс и терминализация
-  - Кнопка пробел вызывает `_reset()`, которая возвращает `plant` и контроллер в начальное состояние (см. [`packages/simulation/GUI/gui.py`](packages/simulation/GUI/gui.py:348)).
+  - Кнопка пробел вызывает `_reset()`, которая возвращает `plant` и контроллер в начальное состояние (см. [`packages/simulation/gui/gui.py`](packages/simulation/gui/gui.py:348)).
   - Опциональная `terminate_condition` проверяется после каждого шага физики; при достижении условия симуляция помечается как завершённая и останавливается подача управления.
 
 Рекомендации по модификации и отладке
 
-- Если вы меняете частоту управления или шаг интеграции, обратите внимание на константы в [`packages/simulation/GUI/constants.py`](packages/simulation/GUI/constants.py:1): `PHYSICS_DT`, `SUBTICKS`, `FPS` и т.д.
-- Для добавления новых действий (кнопок/меню) расширьте [`EventController.poll()`](packages/simulation/GUI/event_controller.py:1) и обрабатывайте их в основном цикле `use()`.
-- Для изменения отрисовки переместите соответствующую логику в [`renderer.py`](packages/simulation/GUI/renderer.py:1) — текущий `PendulumViewer._draw` содержит часть отрисовки напрямую; можно сократить `_draw` и делегировать больше задач `Renderer`.
+- Если вы меняете частоту управления или шаг интеграции, обратите внимание на константы в [`packages/simulation/gui/constants.py`](packages/simulation/gui/constants.py:1): `PHYSICS_DT`, `SUBTICKS`, `FPS` и т.д.
+- Для добавления новых действий (кнопок/меню) расширьте [`EventController.poll()`](packages/simulation/gui/event_controller.py:1) и обрабатывайте их в основном цикле `use()`.
+- Для изменения отрисовки переместите соответствующую логику в [`renderer.py`](packages/simulation/gui/renderer.py:1) — текущий `PendulumViewer._draw` содержит часть отрисовки напрямую; можно сократить `_draw` и делегировать больше задач `Renderer`.
 
 Следующие шаги (итеративно)
 
@@ -149,5 +149,5 @@ flowchart LR
 - `Recorder` сохраняет кадры, а затем при необходимости вызывает сборку видео (ffmpeg).
 - Для ручного управления используется `MotorInertia`, чтобы сгладить мгновенные изменения силы при удержании клавиш.
 
-Если хотите, перенесу часть визуализации из [`packages/simulation/GUI/gui.py`](packages/simulation/GUI/gui.py:389) в [`packages/simulation/GUI/renderer.py`](packages/simulation/GUI/renderer.py:1) и обновлю диаграмму соответствующим образом.
+Если хотите, перенесу часть визуализации из [`packages/simulation/gui/gui.py`](packages/simulation/gui/gui.py:389) в [`packages/simulation/gui/renderer.py`](packages/simulation/gui/renderer.py:1) и обновлю диаграмму соответствующим образом.
 

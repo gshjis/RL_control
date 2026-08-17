@@ -2,9 +2,9 @@
 # Сборка C++-ядра (pybind11) и запуск обучения/GUI.
 
 PYTHON  := $(shell poetry env info -p)/bin/python
-CPP_DIR := packages/simulation/CO/cpp
+CPP_DIR := packages/simulation/co/cpp
 BUILD_DIR := $(CPP_DIR)/build
-SO      := packages/simulation/CO/co_cpp.so
+SO      := packages/simulation/co/co_cpp.so
 JOBS    := $(shell nproc)
 
 .PHONY: all build rebuild train gui clean

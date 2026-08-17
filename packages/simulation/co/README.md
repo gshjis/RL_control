@@ -32,7 +32,7 @@ poetry install
 ### Сборка C++ модуля (опционально, для производительности)
 
 ```bash
-cd packages/simulation/CO/cpp
+cd packages/simulation/co/cpp
 mkdir build && cd build
 cmake .. -DPYBIND11_ROOT=$(poetry env info -p)/lib/python3.12/site-packages/pybind11
 make
@@ -500,20 +500,20 @@ J_val, F = clock_cycle(ctrl, plant, sensor, noise, 0.0, target, cost_fn)
 Классический ПИД-регулятор с оптимизацией коэффициентов
 (Ziegler–Nichols, генетический алгоритм).
 
-Пакет: [`packages/controllers/PID`](../../controllers/PID)
+Пакет: [`packages/controllers/pid`](../../controllers/PID)
 
 ### 6.2. REINFORCE
 
 Policy Gradient (REINFORCE) с нейросетевой политикой
 (Normal-распределение, baseline, gradient clipping, чекпоинты).
 
-Пакет: [`packages/controllers/REINFORCE`](../../controllers/REINFORCE)
+Пакет: [`packages/controllers/reinforce`](../../controllers/REINFORCE)
 
 ### 6.3. DDPG
 
 Deep Deterministic Policy Gradient (Actor-Critic).
 
-Пакет: [`packages/controllers/DDPG`](../../controllers/DDPG)
+Пакет: [`packages/controllers/ddpg`](../../controllers/DDPG)
 
 ---
 

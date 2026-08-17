@@ -354,6 +354,20 @@ files = [
 ]
 
 [[package]]
+name = "base"
+version = "0.1.0"
+description = ""
+optional = false
+python-versions = ">=3.12"
+groups = ["main"]
+files = []
+develop = true
+
+[package.source]
+type = "directory"
+url = "packages/controllers/base"
+
+[[package]]
 name = "blinker"
 version = "1.9.0"
 description = "Fast, simple object-to-object and broadcast signaling"
@@ -665,7 +679,7 @@ develop = true
 
 [package.source]
 type = "directory"
-url = "packages/simulation/CO"
+url = "packages/simulation/co"
 
 [[package]]
 name = "colorama"
@@ -1629,7 +1643,7 @@ develop = true
 
 [package.source]
 type = "directory"
-url = "packages/simulation/GUI"
+url = "packages/simulation/gui"
 
 [[package]]
 name = "gunicorn"
@@ -3303,13 +3317,13 @@ files = []
 develop = true
 
 [package.dependencies]
-co = {path = "../../simulation/CO", develop = true}
+co = {path = "../../simulation/co", develop = true}
 numpy = "^2.4.6"
 scipy = "^1.15.0"
 
 [package.source]
 type = "directory"
-url = "packages/controllers/PID"
+url = "packages/controllers/pid"
 
 [[package]]
 name = "pillow"
@@ -3444,7 +3458,7 @@ develop = true
 
 [package.source]
 type = "directory"
-url = "packages/controllers/PPO"
+url = "packages/controllers/ppo"
 
 [[package]]
 name = "prettytable"
@@ -4367,7 +4381,7 @@ develop = true
 
 [package.source]
 type = "directory"
-url = "packages/controllers/REINFORCE"
+url = "packages/controllers/reinforce"
 
 [[package]]
 name = "requests"
@@ -5305,4 +5319,4 @@ type = ["pytest-mypy (>=1.0.1) ; platform_python_implementation != \"PyPy\""]
 [metadata]
 lock-version = "2.1"
 python-versions = "^3.12"
-content-hash = "7f9a9d7cb261892902ee9aec507aa459175d24ab7c808d3de6db8d8969141290"
+content-hash = "a26683dcbdba7acba9a8fb962d9ab11612c70ed101831883e1b1e0c0717ee210"

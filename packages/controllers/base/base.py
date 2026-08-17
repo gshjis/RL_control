@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 
 import numpy as np
 
-from packages.simulation.CO.datatypes import ControllerConfig
+from packages.simulation.co.datatypes import ControllerConfig
 
 
 class Controller(ABC):
