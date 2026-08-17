@@ -102,8 +102,8 @@ class PlantConfig:
             b_2=self.b_2,
             single_pendulum_mode=self.single_pendulum_mode,
             motor_time_constant=self.motor_time_constant,
-            init_q_stats=self.init_q_stats,
-            init_dq_stats=self.init_dq_stats,
+            init_q_stats=self.init_q_stats.copy(),
+            init_dq_stats=self.init_dq_stats.copy(),
             dt=self.dt,
         )
 

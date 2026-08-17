@@ -3,6 +3,7 @@
 __pycache__
 .ruff_cache
 .vscode
+.pytest_cache
 
 # Temporary venv used during experimentation
 venv_tmp

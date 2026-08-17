@@ -99,7 +99,9 @@ class ObjectOfControl:
 
     def get_telemetry(self) -> np.ndarray:
         """Возвращает состояние после квантования, шума и фильтрации датчика."""
-        return self._cpp_sensor.get_telemetry(self._q, self._dq)
+        return np.asarray(
+            self._cpp_sensor.get_telemetry(self._q, self._dq), dtype=np.float64
+        )
 
     def reset(self) -> None:
         """Сбрасывает координаты, скорости, силу двигателя и датчики."""

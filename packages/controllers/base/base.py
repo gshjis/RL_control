@@ -20,7 +20,7 @@ class Controller(ABC):
         self._filter_cutoff = config.filter_cutoff_hz
 
         self.name: str
-        self._last_action: float = 0.0
+        self._last_control_action: float = 0.0
 
     @abstractmethod
     def action(self, state_target: np.ndarray) -> np.ndarray:

@@ -83,7 +83,8 @@ class PendulumEnv(gym.Env):
         new_a_upds = updates_total - prev_a_upds
 
         # обновить физику на протяжении 20% от одного такта контроллера с старой силой
-        self._plant.update_physics(action.item(), prev_a_upds)
+        if prev_a_upds > 0:
+            self._plant.update_physics(action.item(), prev_a_upds)
         # обновить физику на протяжении 80% от одного такта контроллера с новой силой
         self._plant.update_physics(action.item(), new_a_upds)
         # вычислить награду
