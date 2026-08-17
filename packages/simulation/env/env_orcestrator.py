@@ -1,0 +1,53 @@
+from collections.abc import Callable
+
+import gymnasium as gym
+import numpy as np
+from datatypes import ControllerConfig
+from stable_baselines3.common.vec_env import SubprocVecEnv
+
+from .env import PendulumEnv
+
+
+class EnvOrchestrator:
+    """Создаёт и объединяет параллельные среды обучения."""
+
+    def __init__(
+        self,
+        plant_config,
+        sensor_config,
+        cost_function,
+        terminate_condition: Callable[[np.ndarray, np.ndarray], bool],
+        n_simulations: int,
+        controller_config: ControllerConfig,
+        truncated_condition: Callable[[np.ndarray, np.ndarray], bool],
+        target: Callable[[float], np.ndarray],
+        max_episode_steps: int = 2_000,
+    ):
+        """Принимает конфигурации и число сред, запускает пул окружений."""
+        self._truncated_condition: Callable[[np.ndarray, np.ndarray], bool] = (
+            truncated_condition
+        )
+        self._target: Callable[[float], np.ndarray] = target
+        self._controller_config: ControllerConfig = controller_config
+        self._max_episode_steps = int(max_episode_steps)
+        self._plant_config = plant_config
+        self._sensor_config = sensor_config
+        self._cost_function = cost_function
+        self._terminate_condition = terminate_condition
+
+        env_fns = [self._make_env for _ in range(n_simulations)]
+
+        self._env_hub = SubprocVecEnv(env_fns)
+
+    def _make_env(self) -> gym.Env:
+        """Фабрика для создания одной среды."""
+        return PendulumEnv(
+            self._plant_config,
+            self._sensor_config,
+            self._cost_function,
+            self._terminate_condition,
+            self._controller_config,
+            self._target,
+            self._truncated_condition,
+            self._max_episode_steps,
+        )

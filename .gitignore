@@ -1,20 +1,33 @@
 .venv
 .mypy_cache
 __pycache__
+.ruff_cache
+.vscode
+.pytest_cache
 
 # Temporary venv used during experimentation
 venv_tmp
+recordings
 
 # C++ extension build artifacts (pybind11 via CMake)
-packages/simulation/CO/cpp/build/
-packages/simulation/CO/cpp/CMakeFiles/
-packages/simulation/CO/cpp/CMakeCache.txt
+packages/simulation/co/cpp/build/
+packages/simulation/co/cpp/CMakeFiles/
+packages/simulation/co/cpp/CMakeCache.txt
 
 # Built shared module
-packages/simulation/CO/co_cpp.*
-packages/simulation/CO/cpp/*.so
-packages/simulation/CO/cpp/*.pyd
+packages/simulation/co/co_cpp.*
+packages/simulation/co/cpp/*.so
+packages/simulation/co/cpp/*.pyd
 
 checkpoints
 reinforce_models
 .venv
+
+# Generated media and image artifacts
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.bmp
+*.tif
+*.tiff

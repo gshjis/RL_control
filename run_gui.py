@@ -1,12 +1,4 @@
-"""
-Запуск GUI-симуляции перевёрнутого маятника.
-
-Использование:
-    poetry run python run_gui.py
-
-Если найдена предобученная PPO-модель — используется она, иначе ручное
-управление стрелками (←/→).
-"""
+"""Запускает GUI-симуляцию перевёрнутого маятника."""
 
 from __future__ import annotations
 
@@ -14,17 +6,15 @@ from pathlib import Path
 
 import numpy as np
 
-from configs import *
-from configs import target
-from packages.controllers.PPO import PPOConfig, PPOController
-from packages.simulation.CO import (
+from configs import PLANT_CONFIG, target
+from packages.controllers.ppo import PPOController
+from packages.simulation.co import (
     ControllerConfig,
-    PlantConfig,
     SensorConfig,
 )
-from packages.simulation.ENV.env import PendulumEnv
-from packages.simulation.GUI import PendulumViewer
-from PPO_train import *
+from packages.simulation.env.env import PendulumEnv
+from packages.simulation.gui import PendulumViewer
+from PPO_train import reward_f, terminate_condition, truncated_condition
 
 # Validation checkpoint used by the GUI. This explicitly overrides the
 # training output name imported from PPO_train.py.
@@ -50,7 +40,9 @@ CONTROLLER_CONFIG = ControllerConfig(
 
 TARGET = np.array([0.0, 1, 0.0, 0.0, 0.0, 0.0])
 
+
 def main() -> None:
+    """Создаёт среду и контроллер, затем запускает окно симуляции."""
     # ── Среда ────────────────────────────────────────────────────────────
     env = PendulumEnv(
         PLANT_CONFIG,
@@ -60,7 +52,7 @@ def main() -> None:
         CONTROLLER_CONFIG,
         target,
         truncated_condition,
-        )
+    )
 
     # ── Контроллер (если есть предобученная модель) ─────────────────────
     controller = None

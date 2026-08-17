@@ -1,7 +1,7 @@
 import numpy as np
 
-from packages.controllers.PPO import PPOConfig
-from packages.simulation.CO import (
+from packages.controllers.ppo import PPOConfig
+from packages.simulation.co import (
     ControllerConfig,
     NoiseForce,
     PlantConfig,
@@ -26,12 +26,8 @@ PLANT_CONFIG = PlantConfig(
     b_1=0.001,
     b_2=0.001,
     single_pendulum_mode=True,
-    init_q_stats=np.array([
-        [0.0, np.pi, 0.0],
-        [0.01, 0.00, 0.01]]),
-    init_dq_stats=np.array([
-        [0.0, 0.0, 0.0], 
-        [0.0, 0.00, 0.01]]),
+    init_q_stats=np.array([[0.0, np.pi, 0.0], [0.01, 0.00, 0.01]]),
+    init_dq_stats=np.array([[0.0, 0.0, 0.0], [0.0, 0.00, 0.01]]),
     dt=0.001,
     motor_time_constant=0.01,
 )
@@ -55,4 +51,6 @@ NOISE = NoiseForce(mean=0.00, std=0.03)
 
 
 def target(time: float) -> np.ndarray:
+    """Принимает время и возвращает целевой вектор состояния."""
+    del time
     return np.array([0.0, -1.0, 0.0, 1.0, 0.0, 0.0])

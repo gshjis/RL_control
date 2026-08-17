@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
-
+from base import Controller
 from loggers import Logger
+from pid import PIDController
 
-from packages.controllers.PID.pid import PIDController
-from packages.simulation.CO import (
-    Controller,
+from packages.simulation.co import (
     ControllerConfig,
     NoiseForce,
     ObjectOfControl,
@@ -18,28 +18,24 @@ from packages.simulation.CO import (
 
 
 def check_linerised_position(s_clean: np.ndarray) -> bool:
-    """Проверить, находится ли маятник вблизи вертикального положения.
-
-    Возвращает ``True``, если отклонение от вертикали (π) меньше 50°.
-    """
+    """Принимает состояние, возвращает близость к вертикали."""
     return abs(np.pi - s_clean[1]) < np.radians(50)
 
 
 class SwingUp(Controller):
-    """Энергетический контроллер раскачки маятника из нижнего положения.
-
-    Управление строится на разности текущей и целевой энергии системы.
-    """
+    """Раскачивает маятник энергетическим законом управления."""
 
     def __init__(
         self, config: ControllerConfig, K: float, plant_config: PlantConfig
     ) -> None:
+        """Принимает конфигурацию, усиление и параметры растения."""
         super().__init__(config)
         self.name = "SwingUp"
         self._K = K
         self._plant_config = plant_config.copy()
 
     def get_control(self, s_clean: np.ndarray, target_state: np.ndarray) -> float:
+        """Принимает состояние и цель, возвращает энергоуправляющую силу."""
         # Текущая энергия маятника
         E = (
             0.5 * self._plant_config.m1 * self._plant_config.L1 * (s_clean[4]) ** 2
@@ -62,7 +58,7 @@ class SwingUp(Controller):
         target_state: np.ndarray,
         terminate_condition: Callable[[ObjectOfControl], bool] | None = None,
         episode_max_time: float = 150.0,
-        logger: Optional[Logger] = None,
+        logger: None | Logger = None,
         *,
         method_options: dict[str, Any] | None = None,
     ) -> None:
@@ -71,11 +67,7 @@ class SwingUp(Controller):
 
 
 class SwingUpAndBalance(Controller):
-    """Композитный контроллер: раскачка (SwingUp) + балансировка (PID).
-
-    Переключается между ``SwingUp`` (когда маятник далеко от вертикали)
-    и ``PIDController`` (когда маятник близко к вертикали).
-    """
+    """Переключает раскачку SwingUp и балансировку PID."""
 
     def __init__(
         self,
@@ -83,12 +75,14 @@ class SwingUpAndBalance(Controller):
         swingup_controller: SwingUp,
         balance_controller: PIDController,
     ) -> None:
+        """Принимает конфигурацию, контроллер раскачки и PID-балансировщик."""
         super().__init__(config)
         self.name = "BEAST"
         self._swing_up_controller = swingup_controller
         self._balance_controller = balance_controller
 
     def get_control(self, s_clean: np.ndarray, target_state: np.ndarray) -> float:
+        """Принимает состояние и цель, возвращает силу выбранного контроллера."""
         if check_linerised_position(s_clean):
             return self._balance_controller.get_control(s_clean, target_state)
         return self._swing_up_controller.get_control(s_clean, target_state)
@@ -101,7 +95,7 @@ class SwingUpAndBalance(Controller):
         target_state: np.ndarray,
         terminate_condition: Callable[[ObjectOfControl], bool] | None = None,
         episode_max_time: float = 150.0,
-        logger: Optional[Logger] = None,
+        logger: None | Logger = None,
         *,
         method_options: dict[str, Any] | None = None,
     ) -> None:
