@@ -13,6 +13,8 @@ from packages.simulation.CO.pendulum import ObjectOfControl
 
 
 class PendulumEnv(gym.Env):
+    DEFAULT_MAX_EPISODE_STEPS = 2_000
+
     def __init__(
         self,
         plant_config,
@@ -21,7 +23,8 @@ class PendulumEnv(gym.Env):
         terminate_condition:Callable[[np.ndarray, np.ndarray], bool],
         controller_config:ControllerConfig,
         target: Callable[[float], np.ndarray],
-        truncated_condition:Callable[[np.ndarray, np.ndarray], bool]
+        truncated_condition:Callable[[np.ndarray, np.ndarray], bool],
+        max_episode_steps: int = DEFAULT_MAX_EPISODE_STEPS,
     ) -> None:
         super().__init__()
         self._t = 0
@@ -38,6 +41,10 @@ class PendulumEnv(gym.Env):
         self._terminate_condition:Callable[[np.ndarray, np.ndarray], bool] = terminate_condition
 
         self._controller_dt = controller_config.dt
+        self._max_episode_steps = int(max_episode_steps)
+        if self._max_episode_steps < 1:
+            raise ValueError("max_episode_steps must be positive")
+        self._episode_steps = 0
 
         self.observation_space = spaces.Box(
             low=-np.inf, high=np.inf,
@@ -62,6 +69,7 @@ class PendulumEnv(gym.Env):
         super().reset()
 
         self._t = 0
+        self._episode_steps = 0
 
         self._plant.reset()
         obs = np.concatenate([self._plant.get_telemetry(), self._target(self._t)])
@@ -86,13 +94,17 @@ class PendulumEnv(gym.Env):
         target_t = self._target(self._t)
         obs = np.concatenate([observation, target_t])
 
-        # Награда считается по истинному состоянию и цели (энергетическая).
+        # Награда считается по состоянию и цели; текущая энергетическая
+        # reward-функция не зависит от управляющей силы.
         reward = self._cost_function(observation, target_t)
 
         # проверить на терминальность
         terminate_flag = self._terminate_condition(observation, target_t)
         truncated_flag = self._truncated_condition(observation, target_t)
         self._t += self._controller_dt
-        # вернуть значения  
+        self._episode_steps += 1
+        truncated_flag = truncated_flag or (
+            self._episode_steps >= self._max_episode_steps
+        )
+        # вернуть значения
         return obs, reward, terminate_flag, truncated_flag, {}
-    

@@ -46,6 +46,7 @@ class ValidationCallback(BaseCallback):
         eval_freq: int = 10_000,
         n_eval_episodes: int = 10,
         max_episode_steps: int = 1000,
+        checkpoint_dir: str = "checkpoints/ppo/validation",
         verbose: int = 1,
     ) -> None:
         super().__init__(verbose)
@@ -53,9 +54,15 @@ class ValidationCallback(BaseCallback):
         self.eval_freq = int(eval_freq)
         self.n_eval_episodes = int(n_eval_episodes)
         self.max_episode_steps = int(max_episode_steps)
+        self.checkpoint_dir = checkpoint_dir
+        self._last_eval_timestep = 0
 
     def _on_step(self) -> bool:
-        if self.n_calls % self.eval_freq == 0:
+        # n_calls counts callback invocations, while num_timesteps counts
+        # actual transitions and includes all parallel environments. Schedule
+        # validation by the latter so eval_freq means training timesteps.
+        if self.num_timesteps - self._last_eval_timestep >= self.eval_freq:
+            self._last_eval_timestep = self.num_timesteps
             self._evaluate()
         return True
 
@@ -81,10 +88,23 @@ class ValidationCallback(BaseCallback):
         mean_reward = float(np.mean(episode_rewards))
         self.logger.record("eval/mean_reward", mean_reward)
         self.logger.dump(self.num_timesteps)
+
+        # Сохраняем отдельный snapshot после каждой валидации. Помимо весов
+        # политики сохраняем статистику VecNormalize, иначе модель нельзя
+        # корректно использовать с теми же нормализованными наблюдениями.
+        os.makedirs(self.checkpoint_dir, exist_ok=True)
+        checkpoint_path = os.path.join(
+            self.checkpoint_dir, f"model_{self.num_timesteps}"
+        )
+        self.model.save(checkpoint_path)
+        train_vec_norm = self.model.get_vec_normalize_env()
+        if train_vec_norm is not None:
+            train_vec_norm.save(f"{checkpoint_path}_vecnormalize.pkl")
+
         if self.verbose:
             print(
                 f"[Eval] timesteps={self.num_timesteps} | "
-                f"mean_reward={mean_reward:.4f}"
+                f"mean_reward={mean_reward:.4f} | saved={checkpoint_path}.zip"
             )
 
 
@@ -152,13 +172,29 @@ class PPOController(Controller):
         ``<name>_model.zip`` и нормализатор из ``<name>_vecnormalize.pkl``
         (если он был сохранён).
         """
-        with open(f"{name}_config.json", "r", encoding="utf-8") as f:
-            payload = json.load(f)
+        config_path = f"{name}_config.json"
+        if os.path.exists(config_path):
+            with open(config_path, "r", encoding="utf-8") as f:
+                payload = json.load(f)
 
-        ppo_config = PPOConfig(**payload["ppo_config"])
-        controller_config = ControllerConfig(**payload["controller_config"])
+            ppo_config = PPOConfig(**payload["ppo_config"])
+            controller_config = ControllerConfig(**payload["controller_config"])
+        else:
+            # Validation snapshots contain the model and VecNormalize state,
+            # but historically did not contain a config JSON.  The model
+            # already stores its observation/action spaces, so defaults are
+            # sufficient for inference and keep old snapshots loadable.
+            print(
+                f"Предупреждение: {config_path} не найден; "
+                "загружаются конфигурации PPO по умолчанию."
+            )
+            ppo_config = PPOConfig()
+            controller_config = ControllerConfig()
 
-        model = SB3_PPO.load(f"{name}_model")
+        # Final training checkpoints use ``<name>_model.zip`` while validation
+        # snapshots use ``<name>.zip``. Support both naming conventions.
+        model_path = name if os.path.exists(f"{name}.zip") else f"{name}_model"
+        model = SB3_PPO.load(model_path)
         obj = cls(
             ppo_config=ppo_config,
             controller_config=controller_config,
@@ -203,6 +239,11 @@ class PPOController(Controller):
                 batch_size=self._ppo_config.batch_size,
                 n_epochs=self._ppo_config.n_epochs,
                 gamma=self._ppo_config.gamma,
+                gae_lambda=self._ppo_config.gae_lambda,
+                clip_range=self._ppo_config.clip_range,
+                ent_coef=self._ppo_config.ent_coef,
+                vf_coef=self._ppo_config.vf_coef,
+                max_grad_norm=self._ppo_config.max_grad_norm,
                 policy_kwargs=dict(net_arch=self._ppo_config.net_arch),
                 verbose=1,
                 seed=self._ppo_config.seed,
@@ -212,7 +253,9 @@ class PPOController(Controller):
         eval_env = VecNormalize(
             DummyVecEnv([env_orchestrator._make_env]),
             norm_obs=True,
-            norm_reward=True,
+            # Keep validation rewards raw so mean_reward reflects the actual
+            # reward function instead of VecNormalize's running statistics.
+            norm_reward=False,
         )
         eval_callback = ValidationCallback(
             eval_env=eval_env,

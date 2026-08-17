@@ -9,45 +9,36 @@ from packages.controllers.PPO import PPOController
 from packages.simulation.ENV import env_orcestrator
 
 # Имя (базовое) для сохранения модели, нормализатора и конфигов.
-MODEL_NAME = "checkpoints/po/2_pendl"
+MODEL_NAME = "checkpoints/ppo/pendl"
 import numpy as np
 
 
 def terminate_condition(state:np.ndarray, target:np.ndarray) -> bool:
-    return abs(state[0]) > 1
+    """Terminate only on an unrecoverable cart or numerical failure.
+
+    A fast pass through the upright position is not terminal during swing-up;
+    the agent must be allowed to learn how to remove that angular velocity.
+    """
+    del target
+    return abs(float(state[0])) > 0.5 or not np.all(np.isfinite(state))
 
 def reward_f(state: np.ndarray, target: np.ndarray) -> float:
-    # 1. Распаковка state (согласно твоему описанию)
-    x = state[0]          # положение тележки
-    cos_theta1 = state[1] # косинус угла 1-го звена (цель: -1)
-    # sin_theta1 = state[2] # синус угла 1-го звена (для направления)
-    # cos_theta2 = state[3] # косинус 2-го звена (сейчас 0)
-    # sin_theta2 = state[4] # синус 2-го звена (сейчас 0)
-    # dx = state[5]         # скорость тележки
-    # dtheta1 = state[6]    # угловая скорость 1-го звена
-    # dtheta2 = state[7]    # угловая скорость 2-го звена
+    """Return the simplified mechanical energy of the pendulum link only."""
+    del target
 
-    # # 2. ОСНОВНАЯ НАГРАДА: за угол (подъем маятника)
-    # # cos = -1 (вверху) -> штраф 0. cos = 1 (внизу) -> штраф -4
-    # reward_angle = 1/((cos_theta1 + 1.0)**2 + 0.1)
+    cos_theta1 = float(state[1])
+    dtheta1 = float(state[6])
 
-    # # 3. ШТРАФ ЗА ВЫЛЕТ ТЕЛЕЖКИ (чтобы не улетала за край)
-
-    # # 4. ШТРАФ ЗА СИЛУ (чтобы не дергалась без толку)
-    # # Коэффициент 0.001 — стандарт, чтобы большие силы не поощрялись
-
-    # # 5. СТАБИЛИЗАЦИЯ ВВЕРХУ (бонус за то, что поймал)
-    # # Если маятник почти встал (cos < -0.95) и скорость маленькая (|dtheta| < 1.0)
-    # # даем большую положительную награду, чтобы агент учился удерживать его там
-    # if cos_theta1 < -0.95 and abs(dtheta1) < 1.0:
-    #     bonus_up = 10.0
-    # else:
-    #     bonus_up = 0.0
-
-    # # 6. Итоговая награда
-    # reward = reward_angle + bonus_up
-
-    return np.exp(-(cos_theta1)+2.001)
+    # Energy of the first link only. The cart energy and the cart-pendulum
+    # coupling are intentionally excluded. Parameters come from PLANT_CONFIG.
+    m1 = float(PLANT_CONFIG.m1)
+    L1 = float(PLANT_CONFIG.L1)
+    J1 = float(PLANT_CONFIG.J1)
+    gravity = abs(float(PLANT_CONFIG.g))
+    inertia_about_pivot = J1 + m1 * L1 * L1
+    kinetic_energy = 0.5 * inertia_about_pivot * dtheta1 * dtheta1
+    potential_energy = m1 * gravity * L1 * (1.0 - cos_theta1)
+    return float(kinetic_energy + potential_energy)
     
 def truncated_condition(state:np.ndarray, target:np.ndarray) -> bool:
     return False
@@ -67,7 +58,8 @@ if __name__ == "__main__":
         10,
         CONTROLLER_CONFIG,
         truncated_condition,
-        target
+        target,
+        ppo_config.max_episode_steps,
         )
 
     print("Обучение PPO...")

@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import time
 from collections import deque
+from datetime import datetime
+from pathlib import Path
+import shutil
+import subprocess
 from typing import Any, Callable
 
 import numpy as np
@@ -63,6 +67,12 @@ class PendulumViewer:
         self._obs: np.ndarray | None = None
         self._reward = 0.0
 
+        # Screen recording state. Press R to toggle recording; pressing it
+        # again stops recording and immediately assembles an MP4 with ffmpeg.
+        self._recording = False
+        self._record_video: Path | None = None
+        self._record_process: subprocess.Popen | None = None
+
         # Буферы для графиков.
         self._sine1_hist: deque[float] = deque(maxlen=200)
         self._sine2_hist: deque[float] = deque(maxlen=200)
@@ -83,15 +93,95 @@ class PendulumViewer:
 
             # Аккумулятор времени: симуляция идёт в реальном времени.
             self._time_acc += dt_real
+            recorded_sim_frame = False
             while self._time_acc >= self._sim_dt:
                 self._step()
                 self._time_acc -= self._sim_dt
+                if self._recording:
+                    # One recorded frame per simulation step. This keeps the
+                    # video timeline tied to simulation time, even if a slow
+                    # machine processes several steps in one render frame.
+                    self._draw()
+                    self._capture_frame()
+                    recorded_sim_frame = True
 
-            self._draw()
+            if not recorded_sim_frame:
+                self._draw()
             pygame.display.flip()
             self._clock.tick(C.FPS)
 
+        if self._recording:
+            self._stop_recording()
         pygame.quit()
+
+    def _toggle_recording(self) -> None:
+        """Start/stop recording and compile the captured frames on stop."""
+        if self._recording:
+            self._stop_recording()
+            return
+
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            print("ffmpeg не найден; запись невозможна")
+            return
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        recordings_dir = Path("recordings")
+        recordings_dir.mkdir(parents=True, exist_ok=True)
+        self._record_video = recordings_dir / f"session_{timestamp}.mp4"
+        record_fps = max(1, round(1.0 / self._sim_dt))
+        command = [
+            ffmpeg,
+            "-y",
+            "-f", "rawvideo",
+            "-vcodec", "rawvideo",
+            "-pix_fmt", "rgb24",
+            "-s", f"{C.WIDTH}x{C.HEIGHT}",
+            "-r", str(record_fps),
+            "-i", "-",
+            "-an",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-pix_fmt", "yuv420p",
+            str(self._record_video),
+        ]
+        self._record_process = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        self._recording = True
+        print(f"Запись начата: {self._record_video}")
+
+    def _capture_frame(self) -> None:
+        if not self._recording or self._record_process is None:
+            return
+        if self._record_process.stdin is not None:
+            self._record_process.stdin.write(
+                pygame.image.tostring(self._screen, "RGB")
+            )
+
+    def _stop_recording(self) -> None:
+        if not self._recording or self._record_process is None:
+            return
+
+        self._recording = False
+        process = self._record_process
+        video_path = self._record_video
+        self._record_process = None
+        self._record_video = None
+
+        if process.stdin is not None:
+            process.stdin.close()
+            process.stdin = None
+        stderr = process.stderr.read() if process.stderr is not None else b""
+        returncode = process.wait()
+        if returncode == 0:
+            print(f"Видео сохранено: {video_path}")
+        else:
+            print("Ошибка ffmpeg при создании видео")
+            print(stderr.decode(errors="replace")[-1000:])
 
     # ── Сброс ─────────────────────────────────────────────────────────────
     def _reset(self) -> None:
@@ -138,6 +228,8 @@ class PendulumViewer:
                     self._running = False
                 elif event.key == pygame.K_SPACE:
                     self._reset()
+                elif event.key == pygame.K_r:
+                    self._toggle_recording()
 
         keys = pygame.key.get_pressed()
         self._manual_force = 0.0
@@ -303,6 +395,7 @@ class PendulumViewer:
             lines.append("MANUAL (arrows)")
         else:
             lines.append(f"CTRL: {self._controller.name}")
+        lines.append("REC: ON (R stop)" if self._recording else "REC: OFF (R start)")
 
         for i, line in enumerate(lines):
             surf = self._font.render(line, True, C.WHITE)
