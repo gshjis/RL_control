@@ -7,9 +7,7 @@
 from __future__ import annotations
 
 import math
-from collections import deque
 from pathlib import Path
-from typing import Callable
 
 import matplotlib
 
@@ -22,7 +20,6 @@ from packages.controllers.ppo import PPOController
 from packages.simulation.co import ControllerConfig, SensorConfig
 from packages.simulation.env.env import PendulumEnv
 from PPO_train import reward_f, terminate_condition, truncated_condition
-
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
@@ -50,16 +47,22 @@ def simulate_and_save_cos_plot(
     *,
     model_name: str | Path = PROJECT_ROOT
     / "checkpoints/ppo/validation/model_1900000",
-    max_real_time_s: float = 10.0,
-    output_path: str | Path = PROJECT_ROOT / "plots" / "cos_theta1.png",
+    max_real_time_s: float = 20.0,
+    n_runs: int = 100,
+    output_path: str | Path = PROJECT_ROOT
+    / "plots"
+    / "cos_theta1_mean_and_variance.png",
     render_every: int = 1,
 ) -> Path:
-    """Симулирует до max_real_time_s и сохраняет график cos(theta1).
+    """Делает n_runs прогонов, затем сохраняет среднюю и дисперсию cos(theta1).
 
-    По смыслу "реального времени" это означает: останавливаемся по сумме
-    шагов среды (env.dt внутри контроллера) пока достигнут лимит.
-    В GUI аналогичная величина `_sim_time`.
+    Останавливаемся по симуляционному времени (dt контроллера), как и в GUI.
     """
+
+    if n_runs < 1:
+        raise ValueError("n_runs must be >= 1")
+    if max_real_time_s <= 0.0:
+        raise ValueError("max_real_time_s must be > 0")
 
     sensor_config = _default_sensor_config()
     controller_config = _default_controller_config()
@@ -87,51 +90,61 @@ def simulate_and_save_cos_plot(
             f"Модель не найдена: {controller_path_base}.zip или *_model.zip"
         )
 
-    obs, _ = env.reset()
-
-    # В телеметрии индексы зависят от env/plant. В GUI-сценариях cos(theta1)
-    # используется как self._plant.get_telemetry()[:3] и графики рисуются через deque.
-    # В run_gui.py/cfg обычно cos(theta1) соответствует obs[1].
-    # Это соответствует тому, как в save_reward_comparison собирают cos(theta).
+    # Индекс cos(theta1) в наблюдении (как в save_reward_comparison для cos(theta)).
     COS_INDEX = 1
-
-    cos_hist: deque[float] = deque()
-    time_hist: deque[float] = deque()
 
     sim_dt = float(controller_config.dt)
     max_steps = int(math.ceil(max_real_time_s / sim_dt))
-    t = 0.0
+    # Время считаем дискретно по t=step*dt,
+    # а ряд записываем каждые render_every шагов.
+    recorded_steps = list(range(0, max_steps, render_every))
+    times = np.asarray([step * sim_dt for step in recorded_steps], dtype=float)
 
-    for step in range(max_steps):
-        # env obs shape: [telemetry(14?) + target(6)]
-        # PPOController.action ожидает state_target: np.ndarray той же формы,
-        # которую policy использует. В GUI он передаёт state_target целиком.
-        action = controller.action(obs)
-        obs, reward, terminated, truncated, _ = env.step(action)
-        _ = reward
+    # Собираем матрицу: [n_runs, n_time]
+    all_cos = np.zeros((n_runs, len(recorded_steps)), dtype=float)
 
-        if step % render_every == 0:
-            cos_val = float(np.asarray(obs, dtype=float)[COS_INDEX])
-            cos_hist.append(cos_val)
-            time_hist.append(t)
+    for run_idx in range(n_runs):
+        obs, _ = env.reset()
+        for j, step in enumerate(recorded_steps):
+            action = controller.action(obs)
+            obs, _reward, terminated, truncated, _ = env.step(action)
 
-        t += sim_dt
-        if terminated or truncated:
-            break
+            all_cos[run_idx, j] = float(np.asarray(obs, dtype=float)[COS_INDEX])
 
-    time_arr = np.asarray(time_hist, dtype=float)
-    cos_arr = np.asarray(cos_hist, dtype=float)
+            if terminated or truncated:
+                # Если досрочно — оставляем значения до конца как последние.
+                if j + 1 < len(recorded_steps):
+                    all_cos[run_idx, j + 1 :] = all_cos[run_idx, j]
+                break
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    plt.figure(figsize=(11.5, 4.8), constrained_layout=True)
-    plt.plot(time_arr, cos_arr, linewidth=2.5, color="#1f77b4")
-    plt.title("cos(theta1) vs time")
-    plt.xlabel("time, s")
-    plt.ylabel("cos(theta1)")
-    plt.grid(True, linestyle=":", alpha=0.6)
-    plt.ylim(-1.05, 1.05)
+    mean_cos = all_cos.mean(axis=0)
+    # “Дисперсия этого временного ряда”:
+    var_cos = all_cos.var(axis=0)
+
+    plt.figure(figsize=(12.5, 5.2), constrained_layout=True)
+    ax = plt.gca()
+    ax.plot(times, mean_cos, linewidth=2.6, color="#1f77b4", label="mean cos(theta1)")
+
+    # Лёгкая визуальная “дисперсия”: рисуем полосу mean±0.5*sqrt(var)
+    spread = np.sqrt(var_cos)
+    ax.fill_between(
+        times,
+        mean_cos - 0.5 * spread,
+        mean_cos + 0.5 * spread,
+        color="#ff7f0e",
+        alpha=0.18,
+        label="dispersion (scaled spread)",
+    )
+
+    ax.set_title(f"cos(theta1): mean & dispersion over {n_runs} runs")
+    ax.set_xlabel("time, s")
+    ax.set_ylabel("cos(theta1)")
+    ax.grid(True, linestyle=":", alpha=0.6)
+    ax.set_ylim(-1.05, 1.05)
+    ax.legend(frameon=False)
     plt.savefig(output_path, dpi=180, bbox_inches="tight", facecolor="white")
     plt.close()
 
