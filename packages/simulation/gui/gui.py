@@ -20,14 +20,21 @@ from packages.simulation.gui import constants as C
 class PendulumViewer:
     """Принимает среду и контроллер, отображает симуляцию маятника."""
 
+    DEFAULT_MAX_SIMULATION_TIME = 10.0
+
     def __init__(
         self,
         env: PendulumEnv,
         controller: Any,
+        max_simulation_time: float | None = DEFAULT_MAX_SIMULATION_TIME,
     ) -> None:
         """Принимает среду и необязательный контроллер, создаёт окно просмотра."""
+        if max_simulation_time is not None and max_simulation_time <= 0.0:
+            raise ValueError("max_simulation_time must be positive or None")
+
         self._env = env
         self._controller = controller
+        self._max_simulation_time = max_simulation_time
 
         # Параметры растения для отрисовки.
         self._plant = env._plant
@@ -82,6 +89,13 @@ class PendulumViewer:
             self._time_acc += dt_real
             recorded_sim_frame = False
             while self._time_acc >= self._sim_dt:
+                if (
+                    self._max_simulation_time is not None
+                    and self._sim_time >= self._max_simulation_time
+                ):
+                    self._running = False
+                    break
+
                 self._step()
                 self._time_acc -= self._sim_dt
                 if self._recording:
@@ -91,6 +105,9 @@ class PendulumViewer:
                     self._draw()
                     self._capture_frame()
                     recorded_sim_frame = True
+
+            if not self._running:
+                break
 
             if not recorded_sim_frame:
                 self._draw()
@@ -365,7 +382,13 @@ class PendulumViewer:
             pts = []
             for i, v in enumerate(data):
                 px = x + i * step
-                py = mid - float(np.clip(v, -1.0, 1.0)) * amp
+                # v может прийти как numpy scalar/массив; нам нужен скаляр.
+                v_arr = np.asarray(v, dtype=float)
+                if v_arr.size == 0:
+                    continue
+                v_scalar = float(np.ravel(v_arr)[0])
+                v_clipped = float(np.clip(v_scalar, -1.0, 1.0))
+                py = mid - v_clipped * amp
                 pts.append((int(px), int(py)))
             pygame.draw.lines(self._screen, color, False, pts, 2)
 
