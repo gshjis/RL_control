@@ -382,7 +382,13 @@ class PendulumViewer:
             pts = []
             for i, v in enumerate(data):
                 px = x + i * step
-                py = mid - float(np.clip(v, -1.0, 1.0)) * amp
+                # v может прийти как numpy scalar/массив; нам нужен скаляр.
+                v_arr = np.asarray(v, dtype=float)
+                if v_arr.size == 0:
+                    continue
+                v_scalar = float(np.ravel(v_arr)[0])
+                v_clipped = float(np.clip(v_scalar, -1.0, 1.0))
+                py = mid - v_clipped * amp
                 pts.append((int(px), int(py)))
             pygame.draw.lines(self._screen, color, False, pts, 2)
 
