@@ -39,6 +39,9 @@ class PlantConfig:
     )
     dt: float = 0.0005
 
+    # Вероятность инициализации угла theta в верхнем положении (theta=pi).
+    p_upright: float = 0.01
+
     mean_f: float = 0
     std_f: float = 0.02
 
@@ -57,7 +60,7 @@ class PlantConfig:
     def init_q(self) -> np.ndarray:
         """Принимает настройки распределения и возвращает начальные координаты."""
         t = np.random.normal(self.init_q_stats[0], self.init_q_stats[1])
-        t[1] = np.pi if np.random.randint(0, 2) else 0.0
+        t[1] = np.pi if np.random.random() <= self.p_upright else 0.0
         return t
 
     def init_dq(self) -> np.ndarray:
@@ -105,6 +108,7 @@ class PlantConfig:
             init_q_stats=self.init_q_stats.copy(),
             init_dq_stats=self.init_dq_stats.copy(),
             dt=self.dt,
+            p_upright=self.p_upright,
         )
 
 
