@@ -5,11 +5,9 @@
 - `co_physics.cpp`/`.hpp` — физика (интегратор RK4, уравнения движения).
 - `co_signal.cpp`/`.hpp` — обработка сигналов: `Differentiator` (численное
   дифференцирование + ФНЧ для оценки скорости) и `SignalFilter`
-  (сглаживание первого порядка). Полные реализации, ранее жившие в
-  `signal_processing.py`.
+  (сглаживание первого порядка).
 - `co_sensor.cpp`/`.hpp` — блок датчиков `SensorBlock` (квантование энкодеров
-  + белый шум из предвычисленного пула). Полная реализация, ранее жившая
-  в `sensor.py`.
+  + белый шум из предвычисленного пула).
 
 Эти компоненты используются напрямую через pybind11 API (`co_cpp.SensorBlock`,
 `co_cpp.Differentiator`, `co_cpp.SignalFilter`) — без Python-обёрток.
@@ -18,19 +16,24 @@
 
 - **cmake** ≥ 3.20
 - **C++17** компилятор (gcc ≥ 9, clang ≥ 10)
-- **pybind11** — устанавливается через poetry корневого проекта:
-  ```bash
-  poetry add pybind11
-  ```
+- **pybind11** — уже объявлен в зависимостях корневого `pyproject.toml`,
+  ставится обычным `poetry install --no-root`
 
 Сборка использует Python из корневого poetry-окружения,
 **не требует** создания отдельного `.venv` внутри `packages/simulation/co/`.
 
 ## Сборка
 
+Из корня проекта достаточно одной команды:
+
+```bash
+make build
+```
+
+Разбор того, что эта команда делает, — ниже.
+
 Используйте **внешнее виртуальное окружение из корня проекта** (`.venv`),
-не создавайте новое внутри `packages/simulation/co/`. Из **корня проекта**
-(`/home/gshjis/Python_projects/RL`):
+не создавайте новое внутри `packages/simulation/co/`.
 
 ```bash
 # 1. Подготовить build-директорию
@@ -64,13 +67,18 @@ print('Functions:', [f for f in dir(m) if not f.startswith('_')])
 "
 ```
 
-Ожидаемый вывод:
+Ожидаемый вывод (список отличается по версиям — ищите `SensorBlock`,
+`rk4_step`, `update_physics_cpp`):
 ```
 C++ backend OK: <module 'co_cpp' from '.../packages/simulation/co/co_cpp.so'>
 Functions: ['Differentiator', 'NoiseForce', 'PlantParams', 'SensorBlock',
            'SignalFilter', 'State3', 'StateDot3',
-           'rk4_step', 'update_physics_cpp']
+           'rk4_step', 'set_noise_seed', 'update_physics_cpp']
 ```
+
+`SensorBlock.set_seed(n)` пересеивает пул шума датчиков, а
+`co_cpp.set_noise_seed(n)` — глобальный RNG шума силы; вместе они делают
+эпизод воспроизводимым после `env.reset(seed=...)`.
 
 ## Многоступенчатое обновление физики
 

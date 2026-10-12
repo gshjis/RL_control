@@ -57,15 +57,23 @@ class PlantConfig:
         object.__setattr__(self, "J1", (1.0 / 12.0) * self.m1 * self.l1**2)
         object.__setattr__(self, "J2", (1.0 / 12.0) * self.m2 * self.l2**2)
 
-    def init_q(self) -> np.ndarray:
-        """Принимает настройки распределения и возвращает начальные координаты."""
-        t = np.random.normal(self.init_q_stats[0], self.init_q_stats[1])
-        t[1] = np.pi if np.random.random() <= self.p_upright else 0.0
+    def init_q(self, rng: np.random.Generator | None = None) -> np.ndarray:
+        """Возвращает начальные координаты.
+
+        Без явного генератора использует глобальный ``np.random`` (устаревший
+        путь, оставлен для обратной совместимости). Среда передаёт сюда
+        свой ``self.np_random``, чтобы reset(seed=...) делал эпизод
+        воспроизводимым.
+        """
+        generator = rng if rng is not None else np.random
+        t = generator.normal(self.init_q_stats[0], self.init_q_stats[1])
+        t[1] = np.pi if generator.random() <= self.p_upright else 0.0
         return t
 
-    def init_dq(self) -> np.ndarray:
-        """Возвращает начальные скорости из заданного нормального распределения."""
-        t = np.random.normal(self.init_dq_stats[0], self.init_dq_stats[1])
+    def init_dq(self, rng: np.random.Generator | None = None) -> np.ndarray:
+        """Возвращает начальные скорости (см. init_q про генератор)."""
+        generator = rng if rng is not None else np.random
+        t = generator.normal(self.init_dq_stats[0], self.init_dq_stats[1])
         return t
 
     def to_dict(self) -> dict:
@@ -86,8 +94,14 @@ class PlantConfig:
             "b_2": self.b_2,
             "single_pendulum_mode": self.single_pendulum_mode,
             "motor_time_constant": self.motor_time_constant,
-            "init_q": self.init_q().tolist(),
-            "init_dq": self.init_dq().tolist(),
+            # Сериализуются параметры распределений, а не разовые выборки:
+            # to_dict() должен быть детерминированным (именно он попадает в
+            # артефакты эксперимента рядом с чекпоинтом).
+            "init_q_stats": self.init_q_stats.tolist(),
+            "init_dq_stats": self.init_dq_stats.tolist(),
+            "p_upright": self.p_upright,
+            "mean_f": self.mean_f,
+            "std_f": self.std_f,
             "dt": self.dt,
         }
 
@@ -109,6 +123,8 @@ class PlantConfig:
             init_dq_stats=self.init_dq_stats.copy(),
             dt=self.dt,
             p_upright=self.p_upright,
+            mean_f=self.mean_f,
+            std_f=self.std_f,
         )
 
 
@@ -131,10 +147,23 @@ class SensorConfig:
         0.02,
     )
     seed: int | None = None
-    noise_pool_size: int = 2_000_000
+    # Пул шума хранится в памяти (3 канала × 8 байт на сэмпл):
+    # 100k сэмплов ≈ 5 МБ на блок датчиков и хватает на 100 с симуляции
+    # при dt=1 мс. Старое значение 2_000_000 съедало ~96 МБ на среду,
+    # что с SubprocVecEnv (8 процессов) выливалось в гигабайты RSS.
+    noise_pool_size: int = 100_000
 
-    differentiator_cutoff_hz: float | None = None
+    # Отсечки Гц: None у дифференциатора означает чистое дифференцирование
+    # без сглаживания (шум производной не подавляется) — осознанно не
+    # используем, по умолчанию стоит рабочее значение 40 Гц.
+    differentiator_cutoff_hz: float | None = 40.0
     filter_cutoff_hz: float = 50.0
+
+    # False — честные датчики (квантование + шум + дифференцирование).
+    # True — временный legacy-режим «идеального наблюдателя»: точные углы
+    # и точные скорости из физики. Обучение при exact_mode=True не
+    # переносится на реальные датчики.
+    exact_mode: bool = False
 
     def to_dict(self) -> dict:
         """Возвращает конфигурацию датчиков в виде словаря."""
@@ -148,6 +177,7 @@ class SensorConfig:
             "noise_pool_size": self.noise_pool_size,
             "differentiator_cutoff_hz": self.differentiator_cutoff_hz,
             "filter_cutoff_hz": self.filter_cutoff_hz,
+            "exact_mode": self.exact_mode,
         }
 
 

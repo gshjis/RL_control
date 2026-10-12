@@ -82,13 +82,29 @@ StateDot3 compute_ddq(const State3& q, const StateDot3& dq, double F_total,
     return StateDot3{det1 / detM, det2 / detM, det3v / detM};
 }
 
+namespace {
+/**
+ * @brief Module-level force-noise RNG.
+ *
+ * Seeded with a fixed default value: a simulation started without an
+ * explicit set_noise_seed() call still produces the same noise stream.
+ */
+std::mt19937& force_noise_rng() {
+    static std::mt19937 rng(12345u);
+    return rng;
+}
+} // namespace
+
+void set_noise_seed(unsigned int seed) {
+    force_noise_rng().seed(seed);
+}
+
 double sample_noise_force(const NoiseForceCPP& n) {
     if (n.std == 0.0) {
         return n.mean;
     }
-    static thread_local std::mt19937 rng(std::random_device{}());
     std::normal_distribution<double> dist(n.mean, n.std);
-    return dist(rng);
+    return dist(force_noise_rng());
 }
 
 void rk4_step(State3& q, StateDot3& dq, double F_total, double dt,

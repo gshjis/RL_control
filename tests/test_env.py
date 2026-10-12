@@ -3,6 +3,7 @@ from gymnasium import spaces
 
 from packages.controllers.base import terminate_condition, truncated_condition
 from packages.simulation.co.datatypes import ControllerConfig, PlantConfig, SensorConfig
+from packages.simulation.co.layout import OBS_DIM, TARGET_DIM
 from packages.simulation.env.env import PendulumEnv
 
 
@@ -21,7 +22,7 @@ def make_env() -> PendulumEnv:
         lambda state, target: float(np.sum(state) + np.sum(target)),
         terminate_condition,
         controller_config,
-        lambda _: np.zeros(6),
+        lambda _: np.zeros(TARGET_DIM),
         truncated_condition,
         max_episode_steps=3,
     )
@@ -30,7 +31,7 @@ def make_env() -> PendulumEnv:
 def test_env_spaces_match_contract() -> None:
     env = make_env()
 
-    assert env.observation_space.shape == (14,)
+    assert env.observation_space.shape == (OBS_DIM,)
     assert env.action_space.shape == (1,)
     assert isinstance(env.action_space, spaces.Box)
     assert env.action_space.high[0] == 5.0
@@ -41,7 +42,7 @@ def test_env_reset_returns_observation_and_info() -> None:
 
     observation, info = env.reset(seed=1)
 
-    assert observation.shape == (14,)
+    assert observation.shape == (OBS_DIM,)
     assert observation.dtype == np.float64
     assert info == {}
     env.close()
@@ -54,7 +55,7 @@ def test_env_step_returns_gymnasium_tuple() -> None:
     result = env.step(np.zeros(1, dtype=np.float64))
 
     observation, reward, terminated, truncated, info = result
-    assert observation.shape == (14,)
+    assert observation.shape == (OBS_DIM,)
     assert isinstance(reward, float)
     assert isinstance(terminated, bool)
     assert isinstance(truncated, bool)

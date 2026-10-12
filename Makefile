@@ -7,9 +7,13 @@ BUILD_DIR := $(CPP_DIR)/build
 SO      := packages/simulation/co/co_cpp.so
 JOBS    := $(shell nproc)
 
-.PHONY: all build rebuild train gui clean
+.PHONY: all build rebuild train gui plot eval profile clean install test lint format typecheck check
 
 all: build
+
+## Установить зависимости окружения
+install:
+	poetry install --no-root
 
 ## Собрать C++-ядро (cmake + make)
 build:
@@ -32,6 +36,39 @@ train: build
 ## Запустить GUI (сначала собирает C++-ядро)
 gui: build
 	poetry run python run_gui.py
+
+## Сохранить график cos(theta1) по прогонам политики (headless)
+plot: build
+	poetry run python -m packages plot
+
+## Оценить политику: метрики прогона + график (headless)
+eval: build
+	poetry run python -m packages eval
+
+## Профилирование физического ядра
+profile: build
+	poetry run python -m packages profile
+
+## Прогнать тесты (сначала собирает C++-ядро: часть тестов требует расширения)
+test: build
+	poetry run pytest
+
+## Проверка стиля
+lint:
+	poetry run ruff check .
+	poetry run ruff format --check .
+
+## Автоисправление форматирования
+format:
+	poetry run ruff format .
+	poetry run ruff check --fix .
+
+## Проверка типов
+typecheck:
+	poetry run mypy .
+
+## Полная проверка (та же, что в CI)
+check: lint typecheck test
 
 ## Очистить артефакты сборки
 clean:

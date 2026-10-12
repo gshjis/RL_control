@@ -67,10 +67,19 @@ struct NoiseForceCPP {
  * @param n Noise parameters (mean, std).
  * @return Sampled force (N). Returns mean if std == 0.
  *
- * Uses thread-local RNG (std::mt19937) for safety in multi-threaded
- * simulations.
+ * Draws from a single module-level RNG (std::mt19937). The RNG is seeded
+ * with a fixed default value so simulations are reproducible out of the box;
+ * call set_noise_seed() to choose a different stream.
+ *
+ * @note Not thread-safe: the simulation is expected to run in one thread.
  */
 double sample_noise_force(const NoiseForceCPP& n);
+
+/**
+ * @brief Reseed the force-noise RNG used by sample_noise_force().
+ * @param seed Seed for std::mt19937.
+ */
+void set_noise_seed(unsigned int seed);
 
 /**
  * @brief Compute the time derivative of the state vector (ddq = M^{-1} * rhs).

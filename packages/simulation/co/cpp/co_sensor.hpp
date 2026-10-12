@@ -4,19 +4,24 @@
  * @file co_sensor.hpp
  * @brief C++ sensor telemetry block.
  *
- * Provides the full built-in implementation of the `SensorBlock` previously
- * living in Python (`sensor.py`). The telemetry pipeline is:
+ * Implements the measurement pipeline replacing the old Python `sensor.py`:
  *
  *   1. Quantization of the encoders (angles) and the optical ruler (cart
  *      position).
- *   2. Additive white noise (pre-computed into a pool at construction time and
- *      cycled through on each call to avoid RNG calls in the hot loop).
- *   3. Velocity estimation by a `Differentiator` — it compares the current
- *      noisy position with the previous one and computes the derivative by
- *      finite differences.
- *   4. Smoothing of the noisy states and their derivatives by a `SignalFilter`.
+ *   2. Additive white noise for the coordinates, pre-computed into a pool at
+ *      construction time and cycled through on each call to avoid RNG calls
+ *      in the hot loop.
+ *   3. Velocity estimation by a `Differentiator` — finite differences of the
+ *      noisy positions, low-pass filtered inside the differentiator.
+ *   4. Additive white noise for the velocities (second pool) and smoothing of
+ *      all six channels by a `SignalFilter`.
  *
- * Memory management: the noise pool, the differentiator and the filter are
+ * An explicit `exact_mode` switch keeps the legacy noise-free telemetry: the
+ * true coordinates and the exact velocities from the physics backend are
+ * returned untouched. It defaults to `false` (honest sensors); set it to
+ * `true` only when you deliberately want a perfect-observer experiment.
+ *
+ * Memory management: the noise pools, the differentiator and the filter are
  * owned by the instance (RAII). The measurement buffer is reused across calls
  * to avoid per-call allocations.
  */
@@ -33,10 +38,7 @@ namespace co {
  *
  * The output vector has the layout
  * `(x, cos(theta1), sin(theta1), cos(theta2), sin(theta2), d(x)/dt,
- * d(theta1)/dt, d(theta2)/dt)` — the position, the sine/cosine of the
- * pendulum angles, and the exact time derivatives supplied by the physics
- * backend. The current temporary implementation bypasses quantization, noise,
- * differentiation and filtering.
+ * d(theta1)/dt, d(theta2)/dt)`.
  */
 class SensorBlock {
 public:
@@ -46,13 +48,12 @@ public:
      * @param encoder_resolution_2 Second pendulum encoder resolution (counts/rev).
      * @param noise_std_q          Std of noise for coordinates (x, th1, th2).
      * @param noise_std_dq         Std of noise for velocities (dx, dth1, dth2).
-     *                             (Reserved; velocity noise arises from the
-     *                             differentiation of noisy positions.)
-     * @param seed                 RNG seed for the noise pool.
+     * @param seed                 RNG seed for the noise pools.
      * @param pool_size            Number of pre-generated noise samples.
      * @param dt                   Sampling period (s).
      * @param differentiator_cutoff_hz Low-pass cutoff for the differentiator (Hz).
      * @param filter_cutoff_hz     Low-pass cutoff for the output filter (Hz).
+     * @param exact_mode           True — noise-free exact telemetry.
      */
     SensorBlock(double cart_resolution,
                 int encoder_resolution_1,
@@ -63,14 +64,15 @@ public:
                 int pool_size,
                 double dt,
                 double differentiator_cutoff_hz,
-                double filter_cutoff_hz);
+                double filter_cutoff_hz,
+                bool exact_mode = false);
 
     /**
      * @brief Produce telemetry from the true state.
      * @param raw_q True generalized coordinates (x, theta1, theta2).
      * @param raw_dq True generalized velocities (x_dot, theta1_dot, theta2_dot).
-     * @return Exact-state vector (x, cos(theta1), sin(theta1), cos(theta2),
-     *         sin(theta2), d(x)/dt, d(theta1)/dt, d(theta2)/dt).
+     * @return Measured vector (x, cos(theta1), sin(theta1), cos(theta2),
+     *         sin(theta2), dx, dth1, dth2).
      */
     std::vector<double> get_telemetry(const std::vector<double>& raw_q,
                                       const std::vector<double>& raw_dq);
@@ -78,15 +80,27 @@ public:
     /** @brief Reset the noise-pool index, the differentiator and the filter. */
     void reset();
 
+    /** @brief Regenerate the noise pools from a new seed. */
+    void set_seed(int seed);
+
 private:
+    /** @brief Fill both noise pools from `seed` (zeros in exact_mode). */
+    void build_noise_pool(int seed);
+
     double cart_step_;
     double angle_step_1_;
     double angle_step_2_;
     std::vector<double> std_q_;
+    std::vector<double> std_dq_;
     int pool_size_;
     std::vector<std::vector<double>> noise_pool_;
+    std::vector<std::vector<double>> noise_pool_dq_;
     int noise_index_;
     std::vector<double> meas_;
+    double dt_;
+    double differentiator_cutoff_hz_;
+    double filter_cutoff_hz_;
+    bool exact_mode_;
     Differentiator differentiator_;
     SignalFilter filter_;
 };

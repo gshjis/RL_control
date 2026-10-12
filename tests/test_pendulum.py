@@ -1,6 +1,11 @@
 import numpy as np
 
 from packages.simulation.co import ObjectOfControl, PlantConfig, SensorConfig
+from packages.simulation.co.layout import (
+    CLEAN_IDX_T1,
+    CLEAN_STATE_DIM,
+    TELEMETRY_DIM,
+)
 
 
 def make_plant() -> ObjectOfControl:
@@ -24,8 +29,8 @@ def test_object_of_control_state_shapes() -> None:
 
     assert plant.q.shape == (3,)
     assert plant.dq.shape == (3,)
-    assert plant.get_clean_state().shape == (6,)
-    assert plant.get_telemetry().shape == (8,)
+    assert plant.get_clean_state().shape == (CLEAN_STATE_DIM,)
+    assert plant.get_telemetry().shape == (TELEMETRY_DIM,)
 
 
 def test_object_of_control_updates_and_resets() -> None:
@@ -38,5 +43,5 @@ def test_object_of_control_updates_and_resets() -> None:
     plant.reset()
     reset_state = plant.get_clean_state()
     assert np.all(np.isfinite(reset_state))
-    assert reset_state[1] in (0.0, np.pi)
-    assert np.allclose(reset_state[[0, 2, 3, 4, 5]], 0.0)
+    assert reset_state[CLEAN_IDX_T1] in (0.0, np.pi)
+    assert np.allclose(np.delete(reset_state, CLEAN_IDX_T1), 0.0)

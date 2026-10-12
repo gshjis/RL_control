@@ -8,13 +8,23 @@ import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pygame
 
+from packages.simulation.co.layout import (
+    CLEAN_IDX_DX,
+    CLEAN_IDX_T1,
+    CLEAN_IDX_T2,
+    CLEAN_IDX_X,
+    IDX_X,
+)
 from packages.simulation.env.env import PendulumEnv
 from packages.simulation.gui import constants as C
+
+if TYPE_CHECKING:
+    from packages.controllers.base.base import Controller
 
 
 class PendulumViewer:
@@ -25,7 +35,7 @@ class PendulumViewer:
     def __init__(
         self,
         env: PendulumEnv,
-        controller: Any,
+        controller: Controller | None,
         max_simulation_time: float | None = DEFAULT_MAX_SIMULATION_TIME,
     ) -> None:
         """Принимает среду и необязательный контроллер, создаёт окно просмотра."""
@@ -36,15 +46,15 @@ class PendulumViewer:
         self._controller = controller
         self._max_simulation_time = max_simulation_time
 
-        # Параметры растения для отрисовки.
-        self._plant = env._plant
-        self._l1: float = float(self._plant._l1)
-        self._l2: float = float(self._plant._l2)
-        self._m1: float = float(self._plant._m1)
-        self._m2: float = float(self._plant._m2)
+        # Параметры растения для отрисовки (публичный доступ к модели).
+        self._plant = env.plant
+        self._l1: float = float(self._plant.l1)
+        self._l2: float = float(self._plant.l2)
+        self._m1: float = float(self._plant.m1)
+        self._m2: float = float(self._plant.m2)
 
         # Шаг симуляции (такт контроллера).
-        self._sim_dt: float = float(getattr(env, "_controller_dt", 0.01))
+        self._sim_dt: float = float(env.controller_dt)
 
         pygame.init()
         self._screen = pygame.display.set_mode((C.WIDTH, C.HEIGHT))
@@ -212,7 +222,7 @@ class PendulumViewer:
     def _step(self) -> None:
         """Выполняет один шаг контроллера, физики и накопления графиков."""
         if self._controller is not None:
-            action = self._controller.action(self._obs)
+            action = self._controller.act(self._obs)
         else:
             action = np.array([self._manual_force], dtype=np.float64)
         self._last_action = float(np.asarray(action).reshape(-1)[0])
@@ -222,9 +232,10 @@ class PendulumViewer:
 
         # Логирование графиков.
         q = self._plant.q
-        self._sine1_hist.append(float(np.sin(q[1])))
-        self._sine2_hist.append(float(np.sin(q[2])))
-        self._err_hist.append(float(q[0] - self._env._target(self._time_acc)[0]))
+        target_x = float(self._env.target_fn(self._time_acc)[IDX_X])
+        self._sine1_hist.append(float(np.sin(q[CLEAN_IDX_T1])))
+        self._sine2_hist.append(float(np.sin(q[CLEAN_IDX_T2])))
+        self._err_hist.append(float(q[CLEAN_IDX_X] - target_x))
         if terminated:
             self._reset()
 
@@ -266,9 +277,9 @@ class PendulumViewer:
     def _draw_pendulum(self) -> None:
         """Рисует тележку, стержни и грузы по текущим координатам."""
         q = self._plant.q
-        x = float(q[0])
-        th1 = float(q[1])
-        th2 = float(q[2])
+        x = float(q[CLEAN_IDX_X])
+        th1 = float(q[CLEAN_IDX_T1])
+        th2 = float(q[CLEAN_IDX_T2])
 
         pivot_x = C.WIDTH / 2.0 + x * C.SCALE
         pivot_y = float(C.TRACK_Y)
@@ -396,14 +407,15 @@ class PendulumViewer:
 
     def _draw_hud(self) -> None:
         """Рисует текущее состояние, награду и управляющее воздействие."""
-        q = self._plant.get_telemetry()[:3]
-        dq = self._plant.get_telemetry()[3:]
+        # Чистое состояние (углы в радианах), а не телеметрия датчика.
+        q = self._plant.q
+        dq = self._plant.dq
         lines = [
             f"t = {self._sim_time:6.2f} s",
-            f"x  = {q[0]:+7.3f} m",
-            f"th1= {q[1]:+7.3f} rad",
-            f"th2= {q[2]:+7.3f} rad",
-            f"dx = {dq[0]:+7.3f} m/s",
+            f"x  = {q[CLEAN_IDX_X]:+7.3f} m",
+            f"th1= {q[CLEAN_IDX_T1]:+7.3f} rad",
+            f"th2= {q[CLEAN_IDX_T2]:+7.3f} rad",
+            f"dx = {dq[CLEAN_IDX_DX]:+7.3f} m/s",
             f"F  = {self._last_action:+7.2f} N",
             f"reward = {self._reward:+.3f}",
         ]
