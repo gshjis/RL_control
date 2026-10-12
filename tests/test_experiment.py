@@ -14,6 +14,10 @@ from packages.controllers.base import (
 )
 from packages.experiment import build_target, upright_target
 from packages.presets import default
+from packages.simulation.co.layout import (
+    IDX_COS_T1,
+    TELEMETRY_DIM,
+)
 
 
 def test_default_preset_to_dict_is_json_serializable() -> None:
@@ -36,8 +40,8 @@ def test_to_dict_is_deterministic() -> None:
 
 def test_energy_reward_is_zero_at_upright_equilibrium() -> None:
     reward = build_reward("energy", default().plant)
-    state = np.zeros(8, dtype=np.float64)
-    state[1] = -1.0  # cos(theta = pi) — верхняя точка
+    state = np.zeros(TELEMETRY_DIM, dtype=np.float64)
+    state[IDX_COS_T1] = -1.0  # cos(theta = pi) — верхняя точка
 
     assert reward(state, upright_target(0.0)) == pytest.approx(0.0)
 
@@ -45,10 +49,10 @@ def test_energy_reward_is_zero_at_upright_equilibrium() -> None:
 def test_energy_potential_reward_is_worse_at_the_bottom() -> None:
     reward = build_reward("energy_potential", default().plant)
 
-    upright = np.zeros(8, dtype=np.float64)
-    upright[1] = -1.0
-    bottom = np.zeros(8, dtype=np.float64)
-    bottom[1] = 1.0
+    upright = np.zeros(TELEMETRY_DIM, dtype=np.float64)
+    upright[IDX_COS_T1] = -1.0
+    bottom = np.zeros(TELEMETRY_DIM, dtype=np.float64)
+    bottom[IDX_COS_T1] = 1.0
 
     assert reward(upright, upright_target(0.0)) > reward(bottom, upright_target(0.0))
 

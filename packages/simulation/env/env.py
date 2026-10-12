@@ -8,7 +8,9 @@ import numpy as np
 from gymnasium import spaces
 from numpy.typing import NDArray
 
+from packages.controllers.base.cost_functions import RewardFn
 from packages.simulation.co.datatypes import ControllerConfig, PlantConfig, SensorConfig
+from packages.simulation.co.layout import OBS_DIM
 from packages.simulation.co.pendulum import ObjectOfControl
 
 
@@ -19,9 +21,9 @@ class PendulumEnv(gym.Env):
 
     def __init__(
         self,
-        plant_config,
-        sensor_config,
-        cost_function,
+        plant_config: PlantConfig,
+        sensor_config: SensorConfig,
+        cost_function: RewardFn,
         terminate_condition: Callable[[np.ndarray, np.ndarray], bool],
         controller_config: ControllerConfig,
         target: Callable[[float], np.ndarray],
@@ -40,7 +42,7 @@ class PendulumEnv(gym.Env):
 
         self._old_action: float = 0
 
-        self._cost_function: Callable = cost_function
+        self._cost_function: RewardFn = cost_function
         self._terminate_condition: Callable[[np.ndarray, np.ndarray], bool] = (
             terminate_condition
         )
@@ -52,7 +54,7 @@ class PendulumEnv(gym.Env):
         self._episode_steps = 0
 
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(14,), dtype=np.float64
+            low=-np.inf, high=np.inf, shape=(OBS_DIM,), dtype=np.float64
         )
         self.action_space = spaces.Box(
             low=-controller_config.max_force,
@@ -60,6 +62,35 @@ class PendulumEnv(gym.Env):
             shape=(1,),
             dtype=np.float64,
         )
+
+    @property
+    def target_fn(self) -> Callable[[float], np.ndarray]:
+        """Возвращает функцию цели target(time)."""
+        return self._target
+
+    @property
+    def plant(self) -> ObjectOfControl:
+        """Возвращает объект физической модели (только для чтения)."""
+        return self._plant
+
+    @property
+    def controller_dt(self) -> float:
+        """Возвращает такт контроллера, с которым работает среда."""
+        return self._controller_dt
+
+    @property
+    def episode_steps(self) -> int:
+        """Возвращает число выполненных шагов в текущем эпизоде."""
+        return self._episode_steps
+
+    def _make_observation(
+        self,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Возвращает (наблюдение = телеметрия ‖ цель, телеметрия, цель)."""
+        telemetry = self._plant.get_telemetry()
+        target_t = self._target(self._t)
+        observation = np.concatenate([telemetry, target_t])
+        return observation, telemetry, target_t
 
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
@@ -71,14 +102,14 @@ class PendulumEnv(gym.Env):
         self._episode_steps = 0
 
         self._plant.reset()
-        obs = np.concatenate([self._plant.get_telemetry(), self._target(self._t)])
-        return (obs, {})
+        observation, _telemetry, _target_t = self._make_observation()
+        return (observation, {})
 
     def step(
         self, action: NDArray[np.float64]
     ) -> tuple[np.ndarray, float, bool, bool, dict[str, Any]]:
         """Принимает действие, обновляет физику и возвращает результат шага."""
-        updates_total = int(self._controller_dt / self._plant._dt)
+        updates_total = int(self._controller_dt / self._plant.dt)
         prev_a_upds = int(0.2 * updates_total)
         new_a_upds = updates_total - prev_a_upds
 
@@ -87,23 +118,19 @@ class PendulumEnv(gym.Env):
             self._plant.update_physics(action.item(), prev_a_upds)
         # обновить физику на протяжении 80% от одного такта контроллера с новой силой
         self._plant.update_physics(action.item(), new_a_upds)
-        # вычислить награду
-
-        observation = self._plant.get_telemetry()
-        target_t = self._target(self._t)
-        obs = np.concatenate([observation, target_t])
-
-        # Награда считается по состоянию и цели; текущая энергетическая
+        # Награда считается по телеметрии и цели; текущая энергетическая
         # reward-функция не зависит от управляющей силы.
-        reward = self._cost_function(observation, target_t)
+        observation, telemetry, target_t = self._make_observation()
+
+        reward = self._cost_function(telemetry, target_t)
 
         # проверить на терминальность
-        terminate_flag = self._terminate_condition(observation, target_t)
-        truncated_flag = self._truncated_condition(observation, target_t)
+        terminate_flag = self._terminate_condition(telemetry, target_t)
+        truncated_flag = self._truncated_condition(telemetry, target_t)
         self._t += self._controller_dt
         self._episode_steps += 1
         truncated_flag = truncated_flag or (
             self._episode_steps >= self._max_episode_steps
         )
         # вернуть значения
-        return obs, reward, terminate_flag, truncated_flag, {}
+        return observation, reward, terminate_flag, truncated_flag, {}

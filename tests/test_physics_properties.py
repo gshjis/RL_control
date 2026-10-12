@@ -11,6 +11,13 @@ from __future__ import annotations
 import numpy as np
 
 from packages.simulation.co import ObjectOfControl, PlantConfig, SensorConfig
+from packages.simulation.co.layout import (
+    CLEAN_IDX_DTH1,
+    CLEAN_IDX_DTH2,
+    CLEAN_IDX_T1,
+    CLEAN_IDX_T2,
+    TELEMETRY_DIM,
+)
 
 
 def _plant(**overrides: object) -> PlantConfig:
@@ -84,8 +91,8 @@ def test_upright_equilibrium_is_stationary() -> None:
         pendulum.update_physics(0.0, 1)
 
     clean_state = pendulum.get_clean_state()
-    assert abs(clean_state[1] - np.pi) < 1e-9
-    assert abs(clean_state[4]) < 1e-9
+    assert abs(clean_state[CLEAN_IDX_T1] - np.pi) < 1e-9
+    assert abs(clean_state[CLEAN_IDX_DTH1]) < 1e-9
 
 
 def test_energy_is_conserved_without_dissipation() -> None:
@@ -150,8 +157,8 @@ def test_single_pendulum_mode_locks_second_link() -> None:
     for _ in range(50):
         pendulum.update_physics(0.0, 1)
         clean_state = pendulum.get_clean_state()
-        assert clean_state[2] == 0.0
-        assert clean_state[5] == 0.0
+        assert clean_state[CLEAN_IDX_T2] == 0.0
+        assert clean_state[CLEAN_IDX_DTH2] == 0.0
 
 
 def test_telemetry_layout_matches_documented_contract() -> None:
@@ -165,7 +172,7 @@ def test_telemetry_layout_matches_documented_contract() -> None:
     clean_state = pendulum.get_clean_state()
     telemetry = pendulum.get_telemetry()
 
-    assert telemetry.shape == (8,)
+    assert telemetry.shape == (TELEMETRY_DIM,)
     x, theta1, theta2, dx, dtheta1, dtheta2 = clean_state
 
     expected = np.array(

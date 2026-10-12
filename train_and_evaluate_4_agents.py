@@ -25,12 +25,10 @@ import numpy as np
 from packages.controllers.ppo import PPOController
 from packages.experiment import ExperimentConfig, build_env, build_orchestrator
 from packages.presets import default
+from packages.simulation.co.layout import IDX_COS_T1
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 OUT_ROOT = PROJECT_ROOT / "experiments" / "4_agents_upright_init"
-
-# Индекс cos(theta1) в векторе наблюдения (см. packages.simulation.co.layout).
-COS_INDEX = 1
 
 
 def train_agent(experiment: ExperimentConfig) -> PPOController:
@@ -72,7 +70,9 @@ def eval_agent_cos_and_reward(
             obs, reward, terminated, truncated, _info = env.step(action)
 
             ep_reward += float(reward)
-            cos_all[run_idx, step_idx] = float(np.asarray(obs, dtype=float)[COS_INDEX])
+            cos_all[run_idx, step_idx] = float(
+                np.asarray(obs, dtype=float)[IDX_COS_T1]
+            )
 
             if terminated or truncated:
                 last = cos_all[run_idx, step_idx]

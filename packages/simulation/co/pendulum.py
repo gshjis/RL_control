@@ -84,6 +84,46 @@ class ObjectOfControl:
         """Вектор обобщённых скоростей ``[ẋ, θ̇₁, θ̇₂]``."""
         return self._dq.copy()
 
+    @property
+    def dt(self) -> float:
+        """Возвращает шаг интегрирования физики, с."""
+        return self._dt
+
+    @property
+    def m1(self) -> float:
+        """Возвращает массу первого стержня, кг."""
+        return self._m1
+
+    @property
+    def m2(self) -> float:
+        """Возвращает массу второго стержня, кг."""
+        return self._m2
+
+    @property
+    def l1(self) -> float:
+        """Возвращает полную длину первого стержня, м."""
+        return self._l1
+
+    @property
+    def l2(self) -> float:
+        """Возвращает полную длину второго стержня, м."""
+        return self._l2
+
+    @property
+    def L1(self) -> float:
+        """Возвращает расстояние ось → центр масс первого стержня, м."""
+        return self._L1
+
+    @property
+    def L2(self) -> float:
+        """Возвращает расстояние ось → центр масс второго стержня, м."""
+        return self._L2
+
+    @property
+    def motor_force(self) -> float:
+        """Возвращает текущую силу на выходе двигателя (с учётом инерции), Н."""
+        return self._motor_force
+
     def update_physics(self, F_ideal: float, n_updates: int) -> None:
         """Принимает силу и число подшагов, обновляет состояние модели."""
         self._q, self._dq, self._motor_force = _co_cpp.update_physics_cpp(

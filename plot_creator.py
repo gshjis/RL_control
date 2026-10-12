@@ -18,14 +18,12 @@ import numpy as np
 from packages.controllers.ppo import PPOController
 from packages.experiment import ExperimentConfig, build_env
 from packages.presets import default
+from packages.simulation.co.layout import IDX_COS_T1
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_MODEL_NAME = (
     PROJECT_ROOT / "checkpoints" / "ppo" / "validation" / "model_1900000"
 )
-
-# Индекс cos(theta1) в векторе наблюдения (см. packages.simulation.co.layout).
-COS_INDEX = 1
 
 
 def load_controller(model_name: str | Path) -> PPOController:
@@ -83,7 +81,9 @@ def simulate_and_save_cos_plot(
             action = controller.action(obs)
             obs, _reward, terminated, truncated, _ = env.step(action)
 
-            all_cos[run_idx, j] = float(np.asarray(obs, dtype=float)[COS_INDEX])
+            all_cos[run_idx, j] = float(
+                np.asarray(obs, dtype=float)[IDX_COS_T1]
+            )
 
             if terminated or truncated:
                 # Если досрочно — оставляем значения до конца как последние.

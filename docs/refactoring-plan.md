@@ -113,8 +113,12 @@
       перешли на `packages.presets`/`packages.experiment`. `PPOConfig`
       переехал в `packages/controllers/ppo_config.py`, чтобы слой
       конфигурации не тянул torch/stable-baselines3 при импорте.*
-- [ ] **4. Layout наблюдений.** `packages/simulation/co/layout.py`
+- [x] **4. Layout наблюдений.** `packages/simulation/co/layout.py`
       (константы + `unpack`/`split_obs`), заменить магические индексы.
+      *Публичные свойства `env.plant`, `env.controller_dt`, `env.target_fn`
+      и `ObjectOfControl.dt` заведены уже здесь (GUI и среда заходили в
+      приватные поля). Заодно починен баг HUD: он показывал `cos/sin`
+      телеметрии вместо углов и `cos(theta2)` вместо `dx`.*
 - [ ] **5. Интерфейсы.** ABC `Controller.act()`; обучение — в `PPOTrainer`;
       публичные `env.plant`/`env.controller_dt`/`dt`; инверсия зависимости
       trainer ← env_factory.
