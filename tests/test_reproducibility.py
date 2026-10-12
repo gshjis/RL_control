@@ -62,8 +62,32 @@ def test_constructor_seed_makes_first_reset_reproducible() -> None:
 
 
 def test_consecutive_resets_continue_the_stream() -> None:
-    """Без seed повторный reset продолжает поток, а не копирует прошлый эпизод."""
-    experiment = default()
+    """Без seed повторный reset продолжает поток, а не копирует прошлый эпизод.
+
+    Используем конфигурацию с p_upright=0.5 и ненулевым std для θ1,
+    чтобы начальные состояния варьировались.
+    """
+    from packages.experiment import ExperimentConfig
+    from packages.presets import default
+    from packages.simulation.co.datatypes import PlantConfig
+
+    # Берём базовый пресет и добавляем случайность в θ1
+    base = default()
+    plant = PlantConfig(
+        single_pendulum_mode=True,
+        init_q_stats=np.array([[0.0, np.pi, 0.0], [0.01, 0.1, 0.01]]),  # std=0.1 для θ1
+        init_dq_stats=np.array([[0.0, 0.0, 0.0], [0.0, 0.00, 0.01]]),
+        p_upright=0.5,
+    )
+    experiment = ExperimentConfig(
+        name="repro_test",
+        plant=plant,
+        sensor=base.sensor,
+        controller=base.controller,
+        ppo=base.ppo,
+        n_envs=base.n_envs,
+        seed=base.seed,
+    )
     env = build_env(experiment, seed=5)
 
     first, _ = env.reset()

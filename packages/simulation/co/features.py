@@ -52,18 +52,18 @@ def build_features_auto(
 
     features = [sin_t1, cos_t1, dth1, dx]
 
-    # Ошибка позиции тележки (для позиционного управления)
-    if controller.position_controlled:
-        x = float(telemetry[IDX_X])
-        x_target = float(target[0])
-        features.append(x - x_target)
-
-    # Второе звено (если не single_pendulum_mode)
+    # Второе звено (если не single_pendulum_mode) — ДО ошибки позиции
     if not plant.single_pendulum_mode:
         sin_t2 = float(telemetry[IDX_SIN_T2])
         cos_t2 = float(telemetry[IDX_COS_T2])
         dth2 = float(telemetry[IDX_DTH2])
         features.extend([sin_t2, cos_t2, dth2])
+
+    # Ошибка позиции тележки (для позиционного управления) — в конце
+    if controller.position_controlled:
+        x = float(telemetry[IDX_X])
+        x_target = float(target[0])
+        features.append(x - x_target)
 
     return np.asarray(features, dtype=np.float64)
 
