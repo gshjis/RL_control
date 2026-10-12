@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Literal
 
 from packages.simulation.co.datatypes import PlantConfig
@@ -41,7 +42,7 @@ _TRUNCATE_FACTORIES = {
 }
 
 
-def _unknown(name: str, registry: dict[str, object]) -> ValueError:
+def _unknown(name: str, registry: Mapping[str, object]) -> ValueError:
     """Возвращает понятную ошибку с перечнем доступных имён."""
     available = ", ".join(sorted(registry))
     return ValueError(f"Неизвестная стратегия {name!r}; доступны: {available}")

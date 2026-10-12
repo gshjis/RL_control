@@ -11,7 +11,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 import matplotlib
 
@@ -21,9 +21,31 @@ import numpy as np
 
 from packages.simulation.co.layout import IDX_COS_T1  # noqa: E402
 
-if TYPE_CHECKING:
-    from packages.controllers.base.base import Controller
-    from packages.simulation.env.env import PendulumEnv
+
+class EnvLike(Protocol):
+    """Минимальный контур среды, который использует прогон."""
+
+    controller_dt: float
+
+    def reset(self) -> tuple[np.ndarray, Any]:
+        """Сбрасывает среду, возвращает наблюдение и info."""
+        ...
+
+    def step(self, action: np.ndarray) -> tuple[np.ndarray, float, bool, bool, Any]:
+        """Выполняет шаг, возвращает наблюдение, reward и флаги завершения."""
+        ...
+
+    def close(self) -> None:
+        """Освобождает ресурсы среды."""
+        ...
+
+
+class ControllerLike(Protocol):
+    """Минимальный контур контроллера, который использует прогон."""
+
+    def act(self, observation: np.ndarray) -> np.ndarray:
+        """Принимает наблюдение, возвращает действие."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -64,8 +86,8 @@ class RolloutResult:
 
 
 def rollout(
-    env: PendulumEnv,
-    controller: Controller,
+    env: EnvLike,
+    controller: ControllerLike,
     *,
     seconds: float,
     runs: int,

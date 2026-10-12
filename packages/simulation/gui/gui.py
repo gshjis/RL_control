@@ -221,7 +221,7 @@ class PendulumViewer:
     # ── Шаг симуляции ─────────────────────────────────────────────────────
     def _step(self) -> None:
         """Выполняет один шаг контроллера, физики и накопления графиков."""
-        if self._controller is not None:
+        if self._controller is not None and self._obs is not None:
             action = self._controller.act(self._obs)
         else:
             action = np.array([self._manual_force], dtype=np.float64)

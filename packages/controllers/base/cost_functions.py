@@ -7,6 +7,12 @@ import numpy as np
 from packages.simulation.co.datatypes import PlantConfig
 from packages.simulation.co.layout import IDX_COS_T1, IDX_DTH1
 
+# Награда: (телеметрия, цель) -> скаляр.
+RewardFn = Callable[[np.ndarray, np.ndarray], float]
+# Условия завершения/усечения: (последнее состояние, новое состояние) -> флаг.
+TerminateFn = Callable[[np.ndarray, np.ndarray], bool]
+TruncateFn = Callable[[np.ndarray, np.ndarray], bool]
+
 
 def make_energy_reward(
     plant_config: PlantConfig,
@@ -38,5 +44,28 @@ def make_energy_reward(
 
         e_full = kinetic_energy + potential_energy
         return float(-abs(e_full - u_max))
+
+    return reward
+
+
+def make_energy_potential_reward(
+    plant_config: PlantConfig,
+) -> RewardFn:
+    """Принимает конфигурацию маятника и возвращает награду по потенциальной энергии.
+
+    Вариант награды без кинетического слагаемого: 0 в верхней точке,
+    -U_max в нижней, не штрафует за скорость — для сравнительных экспериментов.
+    """
+    m1 = float(plant_config.m1)
+    half_length = float(plant_config.L1)
+    gravity = abs(float(plant_config.g))
+    u_max = 2.0 * m1 * gravity * half_length
+
+    def reward(state: np.ndarray, target: np.ndarray) -> float:
+        """Принимает телеметрию и цель, возвращает reward."""
+        del target
+        cos_theta1 = float(state[IDX_COS_T1])
+        potential_energy = m1 * gravity * half_length * (1.0 - cos_theta1)
+        return float(potential_energy - u_max)
 
     return reward
