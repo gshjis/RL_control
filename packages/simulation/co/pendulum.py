@@ -1,5 +1,13 @@
 import numpy as np
-import packages.simulation.co.co_cpp as _co_cpp
+
+try:
+    import packages.simulation.co.co_cpp as _co_cpp
+except ImportError as exc:  # pragma: no cover - depends on the build state
+    raise ImportError(
+        "C++ extension 'packages.simulation.co.co_cpp' is not available. "
+        "Build it with 'make build' (CMake + pybind11) before using the "
+        "simulation."
+    ) from exc
 
 from packages.simulation.co.datatypes import PlantConfig, SensorConfig
 
@@ -78,12 +86,6 @@ class ObjectOfControl:
 
     def update_physics(self, F_ideal: float, n_updates: int) -> None:
         """Принимает силу и число подшагов, обновляет состояние модели."""
-        if _co_cpp is None:
-            raise RuntimeError(
-                "C++ backend (co_cpp) is not available. "
-                "Rebuild the pybind11 module or keep the Python fallback enabled."
-            )
-
         self._q, self._dq, self._motor_force = _co_cpp.update_physics_cpp(
             self._q,
             self._dq,

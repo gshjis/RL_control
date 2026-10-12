@@ -45,8 +45,7 @@ def _default_controller_config() -> ControllerConfig:
 
 def simulate_and_save_cos_plot(
     *,
-    model_name: str | Path = PROJECT_ROOT
-    / "checkpoints/ppo/validation/model_1900000",
+    model_name: str | Path = PROJECT_ROOT / "checkpoints/ppo/validation/model_1900000",
     max_real_time_s: float = 20.0,
     n_runs: int = 100,
     output_path: str | Path = PROJECT_ROOT
@@ -80,9 +79,10 @@ def simulate_and_save_cos_plot(
 
     controller_path_base = str(model_name)
     controller = None
-    if Path(f"{controller_path_base}.zip").exists() or Path(
-        f"{controller_path_base}_model.zip"
-    ).exists():
+    if (
+        Path(f"{controller_path_base}.zip").exists()
+        or Path(f"{controller_path_base}_model.zip").exists()
+    ):
         controller = PPOController.load(controller_path_base)
         print(f"Загружена модель: {controller_path_base}")
     else:

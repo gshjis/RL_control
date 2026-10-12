@@ -63,7 +63,6 @@ def save_reward_comparison(
     mass = float(PLANT_CONFIG.m1)
     half_length = float(PLANT_CONFIG.L1)
     gravity = abs(float(PLANT_CONFIG.g))
-    inertia_about_pivot = float(PLANT_CONFIG.J1) + mass * half_length**2
     potential_energy = mass * gravity * half_length * (1.0 - np.cos(angles))
 
     figure, axes = plt.subplots(1, 2, figsize=(14, 5.5), constrained_layout=True)
