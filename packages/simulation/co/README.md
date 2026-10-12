@@ -495,25 +495,12 @@ J_val, F = clock_cycle(ctrl, plant, sensor, noise, 0.0, target, cost_fn)
 
 ## 6. Примеры
 
-### 6.1. PID
+### 6.1. PPO
 
-Классический ПИД-регулятор с оптимизацией коэффициентов
-(Ziegler–Nichols, генетический алгоритм).
+Обучение политики методом PPO (Stable-Baselines3) для удержания маятника
+в верхней точке.
 
-Пакет: [`packages/controllers/pid`](../../controllers/PID)
-
-### 6.2. REINFORCE
-
-Policy Gradient (REINFORCE) с нейросетевой политикой
-(Normal-распределение, baseline, gradient clipping, чекпоинты).
-
-Пакет: [`packages/controllers/reinforce`](../../controllers/REINFORCE)
-
-### 6.3. DDPG
-
-Deep Deterministic Policy Gradient (Actor-Critic).
-
-Пакет: [`packages/controllers/ddpg`](../../controllers/DDPG)
+Пакет: [`packages/controllers/ppo`](../../controllers/ppo)
 
 ---
 

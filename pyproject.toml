@@ -24,12 +24,6 @@ gui = {path = "packages/simulation/gui", develop = true}
 ppo = {path = "packages/controllers/ppo", develop = true}
 base = {path = "packages/controllers/base", develop = true}
 profiling = {path = "profiling", develop = true}
-# Transitional: removed in refactoring stage 2/6 together with the bare
-# `from base import ...` style imports and the dead controller subtrees.
-pid = {path = "packages/controllers/pid", develop = true}
-loggers = {path = "packages/loggers", develop = true}
-reinforce = {path = "packages/controllers/reinforce", develop = true}
-custom = {path = "packages/controllers/custom", develop = true}
 
 [[tool.poetry.source]]
 name = "pytorch_cpu"

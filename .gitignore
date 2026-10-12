@@ -27,7 +27,6 @@ packages/simulation/co/cpp/*.so
 packages/simulation/co/cpp/*.pyd
 
 checkpoints
-reinforce_models
 
 # Generated media and image artifacts
 *.png
