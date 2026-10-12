@@ -213,9 +213,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     evaluate.set_defaults(handler=cmd_eval)
 
-    profile = subparsers.add_parser(
-        "profile", help="профилирование физического ядра"
-    )
+    profile = subparsers.add_parser("profile", help="профилирование физического ядра")
     profile.add_argument("--duration", type=float, default=2.0)
     profile.add_argument(
         "--plot",
