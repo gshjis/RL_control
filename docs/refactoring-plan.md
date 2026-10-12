@@ -119,16 +119,23 @@
       и `ObjectOfControl.dt` заведены уже здесь (GUI и среда заходили в
       приватные поля). Заодно починен баг HUD: он показывал `cos/sin`
       телеметрии вместо углов и `cos(theta2)` вместо `dx`.*
-- [ ] **5. Интерфейсы.** ABC `Controller.act()`; обучение — в `PPOTrainer`;
+- [x] **5. Интерфейсы.** ABC `Controller.act()`; обучение — в `PPOTrainer`;
       публичные `env.plant`/`env.controller_dt`/`dt`; инверсия зависимости
       trainer ← env_factory.
+      *`EnvOrchestrator` удалён: тренер получает фабрику сред, а не готовый
+      пул. В `PPOController` больше нет ни обучения, ни callback'ов — только
+      `act`/`save`/`load`. Заодно починена временная шкала графика
+      `plot_creator` при `render_every > 1`.*
 - [x] **6. Чистка.** Удалить `pid/`, `custom/`, `reinforce/`, `ddpg/`,
       `loggers/`, пустые файлы и их тесты; переименовать опечатки; свести
       README; почистить `.gitignore`.
-      *Сделано: удалены поддеревья, пустые файлы, `save_reward_comparison`
-      (не вызывался ниоткуда) и `NOISE`. Осталось: переименование опечаток
-      (`env_orcestrator`, `reset_angel_integral`, `check_linerised_position`)
-      и сводка README.*
+      *Удалены поддеревья и пустые файлы, `save_reward_comparison`, пять
+      пустых/устаревших README (в том числе gui/README, описывавший
+      модули, которых уже нет). README `co` и `co/cpp` переписаны под
+      фактическое устройство; `.gitignore` почистили, `experiments/`
+      добавлен. Переименование опечаток не понадобилось: все файлы с
+      опечатками (`env_orcestrator`, `reset_angel_integral`,
+      `check_linerised_position`) удалены вместе с мёртвым кодом.*
 - [ ] **7. CLI.** `packages/cli.py`; обёртки вместо точек входа; артефакты
       `artifacts/<run_id>/`; общий `rollout()` + `plot_rollout()`.
 - [ ] **8. Сиды и датчики.** Seed → `np.random.Generator`; управляемый rng в

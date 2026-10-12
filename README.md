@@ -20,14 +20,24 @@ Gymnasium-среда, контроллер PPO и GUI на Pygame.
 
 ## Структура
 
-- [`packages/simulation/co`](packages/simulation/co) — физика, датчики и конфигурации;
+- [`packages/experiment.py`](packages/experiment.py) — описание эксперимента
+  `ExperimentConfig` и фабрики сред;
+- [`packages/presets.py`](packages/presets.py) — пресеты конфигураций
+  (единый источник правды для всех точек входа);
+- [`packages/simulation/co`](packages/simulation/co) — физика (C++/pybind11),
+  датчики, разметка наблюдений и конфигурации (см. README пакета);
 - [`packages/simulation/env`](packages/simulation/env) — Gymnasium-среда;
-- [`packages/controllers/base`](packages/controllers/base) — общий интерфейс и функции среды;
-- [`packages/controllers/ppo`](packages/controllers/ppo) — PPO-контроллер;
-- [`packages/simulation/gui`](packages/simulation/gui) — визуализация;
-- [`tests`](tests) — тесты проекта;
-- [`PPO_train.py`](PPO_train.py) — запуск обучения;
-- [`run_gui.py`](run_gui.py) — запуск GUI.
+- [`packages/controllers/base`](packages/controllers/base) — интерфейс
+  контроллера, награды и условия завершения/усечения эпизода;
+- [`packages/controllers/ppo`](packages/controllers/ppo) — PPO: инференс
+  (`PPOController`) и обучение (`PPOTrainer`);
+- [`packages/simulation/gui`](packages/simulation/gui) — визуализация
+  на Pygame;
+- [`tests`](tests) — тесты;
+- [`PPO_train.py`](PPO_train.py) — обучение, [`run_gui.py`](run_gui.py) — GUI,
+  [`plot_creator.py`](plot_creator.py) — headless-графики,
+  [`train_and_evaluate_4_agents.py`](train_and_evaluate_4_agents.py) —
+  сравнение агентов с разной вероятностью старта в верхней точке.
 
 ## Установка
 

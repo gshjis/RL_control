@@ -10,11 +10,14 @@ __pycache__
 
 # Temporary venv used during experimentation
 venv_tmp
+
+# Local experiment outputs (videos, rollouts)
 recordings
 
 # Experiment artifacts
 artifacts/
 plots/
+experiments/
 
 # C++ extension build artifacts (pybind11 via CMake)
 packages/simulation/co/cpp/build/
