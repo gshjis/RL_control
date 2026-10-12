@@ -38,7 +38,7 @@ PYBIND11_MODULE(co_cpp, m) {
     // ── Sensor block (full C++ implementation) ─────────────────────────────
     py::class_<co::SensorBlock>(m, "SensorBlock")
         .def(py::init<double, int, int, std::vector<double>, std::vector<double>,
-                      int, int, double, double, double>(),
+                      int, int, double, double, double, bool>(),
              py::arg("cart_resolution"),
              py::arg("encoder_resolution_1"),
              py::arg("encoder_resolution_2"),
@@ -48,9 +48,14 @@ PYBIND11_MODULE(co_cpp, m) {
              py::arg("pool_size"),
              py::arg("dt"),
              py::arg("differentiator_cutoff_hz"),
-             py::arg("filter_cutoff_hz"))
+             py::arg("filter_cutoff_hz"),
+             py::arg("exact_mode") = false)
         .def("get_telemetry", &co::SensorBlock::get_telemetry)
-        .def("reset", &co::SensorBlock::reset);
+        .def("reset", &co::SensorBlock::reset)
+        .def("set_seed", &co::SensorBlock::set_seed);
+
+    // Reseed the global force-noise RNG (reproducible physics noise).
+    m.def("set_noise_seed", &set_noise_seed, py::arg("seed"));
 
     // Main step function: updates q/dq using RK4.
     // This mirrors ObjectOfControl.update_physics(F_ideal, noise).

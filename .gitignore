@@ -5,9 +5,19 @@ __pycache__
 .vscode
 .pytest_cache
 
+# Local codebase-memory index artifact
+.codebase-memory/
+
 # Temporary venv used during experimentation
 venv_tmp
+
+# Local experiment outputs (videos, rollouts)
 recordings
+
+# Experiment artifacts
+artifacts/
+plots/
+experiments/
 
 # C++ extension build artifacts (pybind11 via CMake)
 packages/simulation/co/cpp/build/
@@ -20,8 +30,6 @@ packages/simulation/co/cpp/*.so
 packages/simulation/co/cpp/*.pyd
 
 checkpoints
-reinforce_models
-.venv
 
 # Generated media and image artifacts
 *.png

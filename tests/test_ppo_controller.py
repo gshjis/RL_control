@@ -1,12 +1,17 @@
+"""Проверки инференса PPO-контроллера и планировщика валидации."""
+
+from __future__ import annotations
+
 from pathlib import Path
 from typing import cast
 
 import numpy as np
 import pytest
+from stable_baselines3 import PPO as SB3_PPO
 from stable_baselines3.common.vec_env import VecEnv
 
-from packages.controllers.ppo import PPOConfig, PPOController
-from packages.controllers.ppo.ppo import ValidationCallback
+from packages.controllers.ppo import PPOConfig, PPOController, PPOTrainer
+from packages.controllers.ppo.trainer import ValidationCallback
 from packages.simulation.co.datatypes import ControllerConfig
 
 
@@ -30,18 +35,26 @@ def make_controller() -> PPOController:
     return PPOController(PPOConfig(), ControllerConfig())
 
 
-def test_ppo_action_requires_model() -> None:
+def attach_dummy_model(controller: PPOController) -> PPOController:
+    """Возвращает контроллер с фиктивной моделью вместо обученной."""
+    return PPOController.from_model(
+        cast(SB3_PPO, DummyModel()),  # type: ignore[arg-type]
+        ppo_config=PPOConfig(),
+        controller_config=ControllerConfig(),
+    )
+
+
+def test_ppo_act_requires_model() -> None:
     controller = make_controller()
 
     with pytest.raises(RuntimeError, match="PPO-модель не загружена"):
-        controller.action(np.zeros(1))
+        controller.act(np.zeros(1))
 
 
-def test_ppo_action_uses_loaded_model() -> None:
-    controller = make_controller()
-    controller._model = DummyModel()  # type: ignore[assignment]
+def test_ppo_act_uses_loaded_model() -> None:
+    controller = attach_dummy_model(make_controller())
 
-    action = controller.action(np.zeros(1))
+    action = controller.act(np.zeros(1))
 
     np.testing.assert_allclose(action, [0.25])
 
@@ -54,8 +67,7 @@ def test_ppo_save_requires_model(tmp_path) -> None:
 
 
 def test_ppo_save_writes_model_and_config(tmp_path) -> None:
-    controller = make_controller()
-    controller._model = DummyModel()  # type: ignore[assignment]
+    controller = attach_dummy_model(make_controller())
     name = tmp_path / "model"
 
     controller.save(str(name))
@@ -77,3 +89,13 @@ def test_validation_callback_runs_on_schedule(monkeypatch) -> None:
 
     assert callback._on_step()
     assert evaluated
+
+
+def test_trainer_rejects_non_positive_env_count() -> None:
+    with pytest.raises(ValueError, match="n_envs"):
+        PPOTrainer(
+            ppo_config=PPOConfig(),
+            controller_config=ControllerConfig(),
+            env_factory=lambda: None,  # type: ignore[arg-type,misc]
+            n_envs=0,
+        )

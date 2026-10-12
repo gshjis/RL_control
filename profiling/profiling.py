@@ -6,6 +6,16 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from packages.simulation.co import ObjectOfControl, PlantConfig, SensorConfig
+from packages.simulation.co.layout import (
+    CLEAN_IDX_DTH1,
+    CLEAN_IDX_DTH2,
+    CLEAN_IDX_DX,
+    CLEAN_IDX_T1,
+    CLEAN_IDX_T2,
+    CLEAN_IDX_X,
+    IDX_COS_T1,
+    TELEMETRY_LABELS,
+)
 
 
 def simulate_fall(
@@ -73,7 +83,7 @@ def simulate_fall(
 
         # В C++ углы нормализуются в [0, 2*pi). Нижнее положение — theta=0
         # (эквивалентно theta=2*pi), поэтому используем циклическую ошибку.
-        theta = real_state[1]
+        theta = real_state[CLEAN_IDX_T1]
         angle_to_bottom = abs(np.arctan2(np.sin(theta), np.cos(theta)))
         if angle_to_bottom <= bottom_tolerance:
             bottom_reached = True
@@ -101,12 +111,12 @@ def plot_results(
 
     # Нормализация угла в движке создаёт скачок 2*pi -> 0; unwrap делает
     # график непрерывным и не изменяет сами собранные реальные данные.
-    real_theta1 = np.unwrap(real_states[:, 1])
-    real_theta2 = np.unwrap(real_states[:, 2])
+    real_theta1 = np.unwrap(real_states[:, CLEAN_IDX_T1])
+    real_theta2 = np.unwrap(real_states[:, CLEAN_IDX_T2])
 
     fig, axes = plt.subplots(3, 1, figsize=(14, 12), sharex=True)
 
-    axes[0].plot(times, real_states[:, 0], label="real x")
+    axes[0].plot(times, real_states[:, CLEAN_IDX_X], label="real x")
     axes[0].plot(times, real_theta1, label="real theta1")
     axes[0].plot(times, real_theta2, label="real theta2")
     axes[0].set_ylabel("q, м / рад")
@@ -114,24 +124,15 @@ def plot_results(
     axes[0].grid(True)
     axes[0].legend()
 
-    axes[1].plot(times, real_states[:, 3], label="real dx/dt")
-    axes[1].plot(times, real_states[:, 4], label="real dtheta1/dt")
-    axes[1].plot(times, real_states[:, 5], label="real dtheta2/dt")
+    axes[1].plot(times, real_states[:, CLEAN_IDX_DX], label="real dx/dt")
+    axes[1].plot(times, real_states[:, CLEAN_IDX_DTH1], label="real dtheta1/dt")
+    axes[1].plot(times, real_states[:, CLEAN_IDX_DTH2], label="real dtheta2/dt")
     axes[1].set_ylabel("dq, м/с / рад/с")
     axes[1].set_title("Истинные обобщённые скорости")
     axes[1].grid(True)
     axes[1].legend()
 
-    telemetry_labels = (
-        "telemetry x",
-        "telemetry cos(theta1)",
-        "telemetry sin(theta1)",
-        "telemetry cos(theta2)",
-        "telemetry sin(theta2)",
-        "telemetry dx/dt",
-        "telemetry dtheta1/dt",
-        "telemetry dtheta2/dt",
-    )
+    telemetry_labels = TELEMETRY_LABELS
     for index, label in enumerate(telemetry_labels):
         axes[2].plot(times, measured[:, index], label=label)
     axes[2].set_xlabel("Время, с")
@@ -143,12 +144,9 @@ def plot_results(
     fig.tight_layout()
     print(f"Симуляция завершена в t = {times[-1]:.4f} с")
     print(f"Размер real state: {real_states.shape}; размер telemetry: {measured.shape}")
-    print(
-        "Формат telemetry: [x, cos(theta1), sin(theta1), cos(theta2), "
-        "sin(theta2), dx/dt, dtheta1/dt, dtheta2/dt]"
-    )
+    print(f"Формат telemetry: {', '.join(TELEMETRY_LABELS)}")
     plt.show()
-    velocity_error = np.cos(real_states[:, 1]) - measured[:, 1]
+    velocity_error = np.cos(real_states[:, CLEAN_IDX_T1]) - measured[:, IDX_COS_T1]
     print("velocity L2:", np.linalg.norm(velocity_error))
     print("velocity RMSE:", np.sqrt(np.mean(velocity_error**2)))
 
