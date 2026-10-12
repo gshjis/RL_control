@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from packages.controllers.ppo import PPOController
-from packages.experiment import ExperimentConfig, build_orchestrator
+from packages.controllers.ppo import PPOController, PPOTrainer
+from packages.experiment import ExperimentConfig, make_env_factory
 from packages.presets import default
 
 DEFAULT_CHECKPOINT = "checkpoints/ppo/pendl"
@@ -14,17 +14,19 @@ def train(
     checkpoint: str = DEFAULT_CHECKPOINT,
 ) -> PPOController:
     """Обучает PPO-агента и сохраняет модель, нормализатор и конфигурацию."""
-    controller = PPOController(
+    trainer = PPOTrainer(
         ppo_config=experiment.ppo,
         controller_config=experiment.controller,
+        env_factory=make_env_factory(experiment),
+        n_envs=experiment.n_envs,
     )
 
     print("Обучение PPO...")
     print(f"  total_timesteps = {experiment.ppo.total_timesteps}")
-    print("  Пробел — сброс, C — мотор вкл/выкл, Q / ESC — выход")
+    print(f"  n_envs = {experiment.n_envs}")
     print(f"  Инерция двигателя: τ = {experiment.plant.motor_time_constant} с")
 
-    controller.train(build_orchestrator(experiment))
+    controller = trainer.fit()
 
     controller.save(checkpoint)
     print(f"Модель сохранена: {checkpoint}")

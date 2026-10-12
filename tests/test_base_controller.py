@@ -1,3 +1,7 @@
+"""Проверки базового интерфейса контроллера."""
+
+from __future__ import annotations
+
 import numpy as np
 
 from packages.controllers.base import Controller
@@ -7,23 +11,31 @@ from packages.simulation.co.datatypes import ControllerConfig
 class DummyController(Controller):
     """Минимальный контроллер для проверки базового интерфейса."""
 
-    def action(self, state_target: np.ndarray) -> np.ndarray:
-        """Возвращает нулевое действие."""
-        self._last_control_action = 1.5
+    def act(self, observation: np.ndarray) -> np.ndarray:
+        """Принимает наблюдение, возвращает нулевое действие."""
+        del observation
         return np.zeros(1, dtype=np.float64)
 
 
 def test_controller_stores_configuration() -> None:
     controller = DummyController(ControllerConfig(dt=0.02, max_force=12.0))
 
+    assert controller.controller_config.dt == 0.02
+    # Исторический прокси-доступ к полям конфигурации сохранён.
     assert controller.dt == 0.02
-    assert controller.last_control_action == 0.0
+    assert controller.name == "DummyController"
 
 
-def test_controller_reset_clears_last_action() -> None:
+def test_controller_str_and_repr_mention_name() -> None:
     controller = DummyController(ControllerConfig())
-    controller.action(np.zeros(1))
 
-    assert controller.last_control_action == 1.5
-    controller.reset()
-    assert controller.last_control_action == 0.0
+    assert str(controller) == "DummyController"
+    assert "DummyController" in repr(controller)
+
+
+def test_controller_close_is_a_no_op_by_default() -> None:
+    controller = DummyController(ControllerConfig())
+
+    controller.close()
+
+    np.testing.assert_allclose(controller.act(np.zeros(4)), [0.0])

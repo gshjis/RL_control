@@ -22,8 +22,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from packages.controllers.ppo import PPOController
-from packages.experiment import ExperimentConfig, build_env, build_orchestrator
+from packages.controllers.ppo import PPOController, PPOTrainer
+from packages.experiment import ExperimentConfig, build_env, make_env_factory
 from packages.presets import default
 from packages.simulation.co.layout import IDX_COS_T1
 
@@ -33,12 +33,13 @@ OUT_ROOT = PROJECT_ROOT / "experiments" / "4_agents_upright_init"
 
 def train_agent(experiment: ExperimentConfig) -> PPOController:
     """Обучает одного PPO-агента по описанию эксперимента."""
-    controller = PPOController(
+    trainer = PPOTrainer(
         ppo_config=experiment.ppo,
         controller_config=experiment.controller,
+        env_factory=make_env_factory(experiment),
+        n_envs=experiment.n_envs,
     )
-    controller.train(build_orchestrator(experiment))
-    return controller
+    return trainer.fit()
 
 
 def eval_agent_cos_and_reward(
@@ -66,7 +67,7 @@ def eval_agent_cos_and_reward(
         ep_reward = 0.0
 
         for step_idx in range(max_steps):
-            action = controller.action(obs)
+            action = controller.act(obs)
             obs, reward, terminated, truncated, _info = env.step(action)
 
             ep_reward += float(reward)

@@ -37,8 +37,11 @@ from packages.simulation.co.datatypes import (
 
 if TYPE_CHECKING:
     # Только для аннотаций: тяжёлые импорты Gymnasium-слоя отложены.
+    import gymnasium as gym
+
     from packages.simulation.env.env import PendulumEnv
-    from packages.simulation.env.env_orcestrator import EnvOrchestrator
+
+EnvFactory = Callable[[], gym.Env]
 
 TargetFn = Callable[[float], np.ndarray]
 TargetSpec = Literal["upright"]
@@ -164,29 +167,28 @@ def build_env(
     )
 
 
-def build_orchestrator(experiment: ExperimentConfig) -> EnvOrchestrator:
-    """Создаёт пул параллельных сред по описанию эксперимента."""
-    from packages.simulation.env.env_orcestrator import EnvOrchestrator as _Orchestrator
+def make_env_factory(experiment: ExperimentConfig) -> EnvFactory:
+    """Возвращает фабрику сред для пула параллельных окружений.
 
-    return _Orchestrator(
-        experiment.plant,
-        experiment.sensor,
-        experiment.make_reward(),
-        experiment.make_terminate(),
-        experiment.n_envs,
-        experiment.controller,
-        experiment.make_truncate(),
-        experiment.make_target(),
-        experiment.ppo.max_episode_steps,
-    )
+    Каждый вызов создаёт новую среду — именно этого ждут ``SubprocVecEnv``
+    и ``DummyVecEnv``. Тренер получает фабрику, а не готовый пул, поэтому
+    слой контроллеров не зависит от устройства пула.
+    """
+    max_episode_steps = experiment.ppo.max_episode_steps
+
+    def factory() -> gym.Env:
+        return build_env(experiment, max_episode_steps=max_episode_steps)
+
+    return factory
 
 
 __all__ = [
+    "EnvFactory",
     "ExperimentConfig",
     "TargetFn",
     "TargetSpec",
     "build_env",
-    "build_orchestrator",
     "build_target",
+    "make_env_factory",
     "upright_target",
 ]

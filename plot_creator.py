@@ -67,29 +67,36 @@ def simulate_and_save_cos_plot(
 
     sim_dt = float(experiment.controller.dt)
     max_steps = int(math.ceil(max_real_time_s / sim_dt))
-    # Время считаем дискретно по t=step*dt,
-    # а ряд записываем каждые render_every шагов.
-    recorded_steps = list(range(0, max_steps, render_every))
-    times = np.asarray([step * sim_dt for step in recorded_steps], dtype=float)
+    # Шагаем по всем шагам, а ряд записываем каждые render_every шагов.
+    record_indices = list(range(0, max_steps, max(render_every, 1)))
+    n_records = len(record_indices)
+    times = np.asarray([step * sim_dt for step in record_indices], dtype=float)
 
     # Собираем матрицу: [n_runs, n_time]
-    all_cos = np.zeros((n_runs, len(recorded_steps)), dtype=float)
+    all_cos = np.zeros((n_runs, n_records), dtype=float)
 
     for run_idx in range(n_runs):
         obs, _ = env.reset()
-        for j, step in enumerate(recorded_steps):
-            action = controller.action(obs)
+        last_value = 0.0
+        record_index = 0
+
+        for step in range(max_steps):
+            action = controller.act(obs)
             obs, _reward, terminated, truncated, _ = env.step(action)
 
-            all_cos[run_idx, j] = float(
-                np.asarray(obs, dtype=float)[IDX_COS_T1]
-            )
+            last_value = float(np.asarray(obs, dtype=float)[IDX_COS_T1])
+            if step == record_indices[record_index]:
+                all_cos[run_idx, record_index] = last_value
+                record_index += 1
+                if record_index == n_records:
+                    break
 
             if terminated or truncated:
-                # Если досрочно — оставляем значения до конца как последние.
-                if j + 1 < len(recorded_steps):
-                    all_cos[run_idx, j + 1 :] = all_cos[run_idx, j]
                 break
+
+        # Досрочное завершение эпизода: дописываем последнее значение.
+        if record_index < n_records:
+            all_cos[run_idx, record_index:] = last_value
 
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
