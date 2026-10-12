@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 
     from packages.simulation.env.env import PendulumEnv
 
-EnvFactory = Callable[[int], gym.Env]
+type EnvFactory = Callable[[int], gym.Env]
 """Фабрика сред: принимает ранг в пуле (для сдвига seed) и создаёт среду."""
 
 TargetFn = Callable[[float], np.ndarray]
