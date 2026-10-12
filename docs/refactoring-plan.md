@@ -136,8 +136,15 @@
       добавлен. Переименование опечаток не понадобилось: все файлы с
       опечатками (`env_orcestrator`, `reset_angel_integral`,
       `check_linerised_position`) удалены вместе с мёртвым кодом.*
-- [ ] **7. CLI.** `packages/cli.py`; обёртки вместо точек входа; артефакты
+- [x] **7. CLI.** `packages/cli.py`; обёртки вместо точек входа; артефакты
       `artifacts/<run_id>/`; общий `rollout()` + `plot_rollout()`.
+      *`python -m packages train|gui|plot|eval|profile` (тяжёлые импорты
+      отложены внутрь команд). `PPO_train.py`/`run_gui.py`/`plot_creator.py`
+      — тонкие обёртки, так что `make train`/`make gui` не изменились.
+      Общий прогон вынесен в `packages/rollout.py` — три дублирующих цикла
+      (plot_creator, train_and_evaluate, удалённая функция GUI) свернулись
+      в одну реализацию. Загрузка чекпоинтов —
+      `packages/controllers/ppo/checkpoints.py`.*
 - [ ] **8. Сиды и датчики.** Seed → `np.random.Generator`; управляемый rng в
       C++ + `set_seed()`; `exact_mode: bool = False`; тест
       воспроизводимости; детерминированные сиды eval.

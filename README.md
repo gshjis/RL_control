@@ -55,16 +55,23 @@ poetry install --no-root
 make build
 ```
 
-Запустить обучение PPO:
+Все команды есть в едином CLI (корневые скрипты — тонкие обёртки над ним):
 
 ```bash
-make train
+poetry run python -m packages train --help
+poetry run python -m packages gui                      # визуализация
+poetry run python -m packages plot --runs 20           # график cos(theta1)
+poetry run python -m packages eval --model checkpoints/ppo/pendl
+poetry run python -m packages profile --duration 5     # профилирование ядра
 ```
 
-Запустить визуализацию:
+То же через make:
 
 ```bash
-make gui
+make train   # обучение PPO
+make gui     # визуализация
+make plot    # headless-график прогона
+make eval    # метрики прогона + график
 ```
 
 ## Проверки
