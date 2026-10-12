@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Callable
 from functools import partial
 from typing import cast
 
-import gymnasium as gym
 import numpy as np
 from stable_baselines3 import PPO as SB3_PPO
 from stable_baselines3.common.callbacks import BaseCallback

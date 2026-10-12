@@ -150,7 +150,8 @@ def plot_rollout(
         alpha=0.18,
         label="dispersion (scaled spread)",
     )
-    axis.set_title(title or f"cos(theta1): mean & dispersion over {result.rewards.size} runs")
+    runs = result.rewards.size
+    axis.set_title(title or f"cos(theta1): mean & dispersion over {runs} runs")
     axis.set_xlabel("time, s")
     axis.set_ylabel("cos(theta1)")
     axis.grid(True, linestyle=":", alpha=0.6)

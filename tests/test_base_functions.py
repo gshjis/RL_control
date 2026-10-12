@@ -15,8 +15,8 @@ from packages.simulation.co.layout import (
     IDX_COS_T1,
     IDX_DTH1,
     IDX_X,
-    TELEMETRY_DIM,
     TARGET_DIM,
+    TELEMETRY_DIM,
 )
 
 # Параметры, для которых U_max = 2 * m1 * |g| * L1 = 2.0 Дж.
@@ -36,7 +36,9 @@ def test_energy_reward_is_zero_at_upright_without_motion() -> None:
     """В верхней точке без кинетической энергии reward = 0 (это максимум)."""
     reward = make_energy_reward(PLANT)
 
-    assert reward(_telemetry(cos_theta1=-1.0), np.ones(TARGET_DIM)) == pytest.approx(0.0)
+    assert reward(_telemetry(cos_theta1=-1.0), np.ones(TARGET_DIM)) == pytest.approx(
+        0.0
+    )
 
 
 def test_energy_reward_is_minus_u_max_at_the_bottom() -> None:

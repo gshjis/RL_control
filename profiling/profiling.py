@@ -7,9 +7,9 @@ import numpy as np
 
 from packages.simulation.co import ObjectOfControl, PlantConfig, SensorConfig
 from packages.simulation.co.layout import (
-    CLEAN_IDX_DX,
     CLEAN_IDX_DTH1,
     CLEAN_IDX_DTH2,
+    CLEAN_IDX_DX,
     CLEAN_IDX_T1,
     CLEAN_IDX_T2,
     CLEAN_IDX_X,
