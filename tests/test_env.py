@@ -7,7 +7,7 @@ from packages.simulation.co.features import get_obs_dim
 from packages.simulation.env.env import PendulumEnv
 
 
-def make_env() -> PendulumEnv:
+def make_env() -> tuple[PendulumEnv, int]:
     plant_config = PlantConfig(
         init_q_stats=np.zeros((2, 3)),
         init_dq_stats=np.zeros((2, 3)),
@@ -17,16 +17,19 @@ def make_env() -> PendulumEnv:
     )
     controller_config = ControllerConfig(dt=0.001, max_force=5.0)
     expected_obs_dim = get_obs_dim(plant_config, controller_config)
-    return PendulumEnv(
-        plant_config,
-        sensor_config,
-        lambda state, target: float(np.sum(state) + np.sum(target)),
-        terminate_condition,
-        controller_config,
-        lambda _: np.zeros(6),  # target dim is still 6
-        truncated_condition,
-        max_episode_steps=3,
-    ), expected_obs_dim
+    return (
+        PendulumEnv(
+            plant_config,
+            sensor_config,
+            lambda state, target: float(np.sum(state) + np.sum(target)),
+            terminate_condition,
+            controller_config,
+            lambda _: np.zeros(6),  # target dim is still 6
+            truncated_condition,
+            max_episode_steps=3,
+        ),
+        expected_obs_dim,
+    )
 
 
 def test_env_spaces_match_contract() -> None:
@@ -65,7 +68,7 @@ def test_env_step_returns_gymnasium_tuple() -> None:
 
 
 def test_env_truncates_at_episode_limit() -> None:
-    env = make_env()
+    env, _ = make_env()
     env.reset()
     action = np.zeros(1, dtype=np.float64)
 
