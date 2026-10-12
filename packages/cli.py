@@ -59,9 +59,7 @@ def _run_rollout(args: argparse.Namespace):
     from packages.rollout import rollout
 
     experiment = default()
-    env = build_env(
-        experiment, max_episode_steps=experiment.ppo.max_episode_steps
-    )
+    env = build_env(experiment, max_episode_steps=experiment.ppo.max_episode_steps)
     controller = load_controller(args.model)
     print(f"Загружена модель: {args.model}")
     return rollout(env, controller, seconds=args.seconds, runs=args.runs)
@@ -204,9 +202,7 @@ def build_parser() -> argparse.ArgumentParser:
     plot = subparsers.add_parser(
         "plot", parents=[rollout_parser], help="сохранить график cos(theta1)"
     )
-    plot.add_argument(
-        "--output", type=Path, default=None, help="куда сохранить PNG"
-    )
+    plot.add_argument("--output", type=Path, default=None, help="куда сохранить PNG")
     plot.set_defaults(handler=cmd_plot)
 
     evaluate = subparsers.add_parser(

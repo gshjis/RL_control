@@ -48,9 +48,7 @@ def eval_agent_cos_and_reward(
     """Оценивает агента: суммарная награда и статистика cos(theta1) во времени."""
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    env = build_env(
-        experiment, max_episode_steps=experiment.ppo.max_episode_steps
-    )
+    env = build_env(experiment, max_episode_steps=experiment.ppo.max_episode_steps)
     result = rollout(env, controller, seconds=seconds, runs=runs)
 
     np.save(out_dir / "cos_times.npy", result.times)

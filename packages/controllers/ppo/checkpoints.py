@@ -18,6 +18,4 @@ def load_controller(model_name: str | Path) -> PPOController:
     if Path(f"{base}.zip").exists() or Path(f"{base}_model.zip").exists():
         return PPOController.load(base)
 
-    raise FileNotFoundError(
-        f"Модель не найдена: {base}.zip или {base}_model.zip"
-    )
+    raise FileNotFoundError(f"Модель не найдена: {base}.zip или {base}_model.zip")

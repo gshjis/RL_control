@@ -146,9 +146,7 @@ def plot_results(
     print(f"Размер real state: {real_states.shape}; размер telemetry: {measured.shape}")
     print(f"Формат telemetry: {', '.join(TELEMETRY_LABELS)}")
     plt.show()
-    velocity_error = (
-        np.cos(real_states[:, CLEAN_IDX_T1]) - measured[:, IDX_COS_T1]
-    )
+    velocity_error = np.cos(real_states[:, CLEAN_IDX_T1]) - measured[:, IDX_COS_T1]
     print("velocity L2:", np.linalg.norm(velocity_error))
     print("velocity RMSE:", np.sqrt(np.mean(velocity_error**2)))
 
