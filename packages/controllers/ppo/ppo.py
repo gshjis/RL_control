@@ -7,7 +7,7 @@ from typing import cast
 
 import gymnasium as gym
 import numpy as np
-from base import Controller
+from packages.controllers.base.base import Controller
 from stable_baselines3 import PPO as SB3_PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.vec_env import (

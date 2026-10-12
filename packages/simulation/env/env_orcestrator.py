@@ -2,7 +2,7 @@ from collections.abc import Callable
 
 import gymnasium as gym
 import numpy as np
-from datatypes import ControllerConfig
+from packages.simulation.co.datatypes import ControllerConfig
 from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from .env import PendulumEnv

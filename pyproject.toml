@@ -19,11 +19,6 @@ stable-baselines3 = ">=2.4.0,<3.0.0"
 # Kept pinned to the CPU wheel index: PyPI default torch pulls multi-GB CUDA
 # builds, which breaks reproducible installs.
 torch = {version = "^2.13.0", source = "pytorch_cpu"}
-co = {path = "packages/simulation/co", develop = true}
-gui = {path = "packages/simulation/gui", develop = true}
-ppo = {path = "packages/controllers/ppo", develop = true}
-base = {path = "packages/controllers/base", develop = true}
-profiling = {path = "profiling", develop = true}
 
 [[tool.poetry.source]]
 name = "pytorch_cpu"
