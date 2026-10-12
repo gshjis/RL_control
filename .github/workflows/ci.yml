@@ -13,6 +13,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history: the lock-refresh step commits on top of the PR
+          # merge ref and pushes to the branch — with the default shallow
+          # clone git cannot prove ancestry and rejects the push.
+          fetch-depth: 0
 
       - name: Install Poetry
         run: pipx install poetry
