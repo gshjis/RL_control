@@ -34,6 +34,7 @@ from packages.simulation.co.datatypes import (
     PlantConfig,
     SensorConfig,
 )
+from packages.simulation.co.features import get_obs_dim
 
 if TYPE_CHECKING:
     # Только для аннотаций: тяжёлые импорты Gymnasium-слоя отложены.
@@ -43,6 +44,20 @@ if TYPE_CHECKING:
 
 type EnvFactory = Callable[[int], gym.Env]
 """Фабрика сред: принимает ранг в пуле (для сдвига seed) и создаёт среду."""
+
+
+def _make_ppo_config(plant: PlantConfig, controller: ControllerConfig) -> PPOConfig:
+    """Строит PPOConfig с net_arch, адаптированным под размерность наблюдения."""
+    obs_dim = get_obs_dim(plant, controller)
+    hidden = min(max(obs_dim * 6, 32), 128)
+    net_arch = [hidden] if obs_dim <= 5 else [hidden, hidden]
+    return PPOConfig(
+        total_timesteps=3_500_000,
+        eval_freq=100_000,
+        n_eval_episodes=2,
+        max_episode_steps=2_000,
+        net_arch=net_arch,
+    )
 
 TargetFn = Callable[[float], np.ndarray]
 TargetSpec = Literal["upright"]
@@ -126,6 +141,20 @@ class ExperimentConfig:
                 raise AttributeError(f"У PlantConfig нет поля {key!r}")
             setattr(plant, key, value)
         return dataclasses.replace(self, plant=plant)
+
+    def with_controller(self, **overrides: Any) -> ExperimentConfig:
+        """Возвращает копию с изменёнными параметрами контроллера."""
+        controller = dataclasses.replace(self.controller, **overrides)
+        return dataclasses.replace(self, controller=controller)
+
+    def rebuild_ppo_config(self) -> ExperimentConfig:
+        """Возвращает копию с PPOConfig, пересчитанным под текущий plant/controller.
+
+        Полезно после with_plant/with_controller, если изменилась размерность
+        наблюдения (single↔double pendulum, position_controlled).
+        """
+        new_ppo = _make_ppo_config(self.plant, self.controller)
+        return dataclasses.replace(self, ppo=new_ppo)
 
     # ── Сериализация ───────────────────────────────────────────────────────
     def to_dict(self) -> dict[str, Any]:

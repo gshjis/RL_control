@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: ["*"]
   pull_request:
 
 permissions:
@@ -14,9 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history: the lock-refresh step commits on top of the PR
-          # merge ref and pushes to the branch — with the default shallow
-          # clone git cannot prove ancestry and rejects the push.
+          # Full history: the lock-refresh step commits on top of the branch
+          # and pushes to it — with the default shallow clone git cannot
+          # prove ancestry and rejects the push.
           fetch-depth: 0
 
       - name: Install Poetry
@@ -30,11 +30,10 @@ jobs:
 
       # pyproject.toml is edited more often than the lock file; instead of
       # failing the whole run, refresh poetry.lock in place and push it back
-      # to the PR branch. The push uses GITHUB_TOKEN, so it does not spawn
+      # to the same branch. The push uses GITHUB_TOKEN, so it does not spawn
       # another workflow run (no loops), and this job continues with the
       # refreshed lock.
       - name: Refresh poetry.lock if stale
-        if: github.event_name == 'pull_request'
         run: |
           if poetry check --lock; then
             echo "poetry.lock is up to date"
@@ -42,8 +41,9 @@ jobs:
           fi
           echo "poetry.lock is stale, regenerating"
           poetry lock
-          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "Fork PR: refreshed lock stays in the runner, not pushed"
+          # Don't push on forks (no write access to upstream)
+          if [ "${{ github.repository }}" != "${{ github.event.repository.full_name }}" ]; then
+            echo "Fork: refreshed lock stays in the runner, not pushed"
             exit 0
           fi
           git config user.name "github-actions[bot]"
@@ -54,9 +54,8 @@ jobs:
             exit 0
           fi
           git commit -m "chore(deps): refresh poetry.lock [skip ci]"
-          # actions/checkout leaves a detached HEAD in PR runs; push the
-          # current commit onto the PR branch explicitly.
-          git push origin "HEAD:${{ github.head_ref }}"
+          # Push to the current branch (works for both push and PR events)
+          git push origin "HEAD:${{ github.ref_name }}"
 
       - name: Install dependencies
         run: poetry install --no-root
