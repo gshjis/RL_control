@@ -25,7 +25,10 @@ from packages.simulation.co.layout import IDX_COS_T1  # noqa: E402
 class EnvLike(Protocol):
     """Минимальный контур среды, который использует прогон."""
 
-    controller_dt: float
+    @property
+    def controller_dt(self) -> float:
+        """Период шага контроллера, с."""
+        ...
 
     def reset(self) -> tuple[np.ndarray, Any]:
         """Сбрасывает среду, возвращает наблюдение и info."""

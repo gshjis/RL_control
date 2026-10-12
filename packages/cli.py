@@ -149,9 +149,14 @@ def cmd_eval(args: argparse.Namespace) -> int:
 
 def cmd_profile(args: argparse.Namespace) -> int:
     """Профилирует физическое ядро: скорость и погрешность датчика."""
-    from profiling.profiling import profiler
+    from profiling.profiling import plot_results, simulate_fall
 
-    profiler(duration=args.duration, plot=args.plot)
+    times, real_states, measured = simulate_fall(max_time=args.duration)
+    if args.plot:
+        plot_results(times, real_states, measured)
+    else:
+        print(f"Симуляция завершена в t = {times[-1]:.4f} с")
+        print(f"Телеметрия: {measured.shape[0]} шагов, {measured.shape[1]} каналов")
     return 0
 
 
