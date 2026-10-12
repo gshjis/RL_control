@@ -145,14 +145,29 @@
       (plot_creator, train_and_evaluate, удалённая функция GUI) свернулись
       в одну реализацию. Загрузка чекпоинтов —
       `packages/controllers/ppo/checkpoints.py`.*
-- [ ] **8. Сиды и датчики.** Seed → `np.random.Generator`; управляемый rng в
+- [x] **8. Сиды и датчики.** Seed → `np.random.Generator`; управляемый rng в
       C++ + `set_seed()`; `exact_mode: bool = False`; тест
       воспроизводимости; детерминированные сиды eval.
-- [ ] **9. C++.** `make test` зависит от `make build`; golden-тесты
+      *`ExperimentConfig.seed` (42) + `factory(rank)` → `seed+rank` на среду;
+      `PendulumEnv(seed=...)` сеет первый reset; `init_q/init_dq` берут
+      генератор у среды. В C++: `set_noise_seed()` (фиксированный дефолт,
+      не `random_device`), `SensorBlock.set_seed()`. Датчик включён по
+      умолчанию: квантование → шум позиций → дифференцирование → шум
+      скоростей → ФНЧ; `noise_std_dq` работает (был «reserved»). Пул шума
+      2M → 100k (~96 → ~5 МБ на среду). `tests/test_reproducibility.py`.*
+- [x] **9. C++.** `make test` зависит от `make build`; golden-тесты
       энергосохранности; честный API сенсора (убрать `(void)noise_std_dq`).
-- [ ] **10. Качество.** Аннотации типов; поднять ruff N-правила; тесты
+      *`test: build` уже был в Makefile; аналитические проверки физики —
+      `tests/test_physics_properties.py` (этап 1); API сенсора честный
+      после этапа 8. Сборку прогнать не мог — см. «Что осталось».*
+- [x] **10. Качество.** Аннотации типов; поднять ruff N-правила; тесты
       GUI/plot/PPO save-load; `.github/workflows/ci.yml`; `LICENSE` MIT;
       обновить README.
+      *Убран `Any` из API GUI; `tests/test_rollout.py` и `tests/test_cli.py`
+      (без физики); `LICENSE` (MIT); CI-workflow с `make build` + lint +
+      mypy + pytest; README дополнен лицензией и разделом
+      «Воспроизводимость». Тесты GUI (pygame headless) и подъём ruff
+      N-правил отложены: требуют прогона, который сейчас недоступен.*
 
 ## Что не менять
 
@@ -162,6 +177,24 @@
   должны грузиться.
 - Смысл reward `-|E − U_max|` и условий terminate/truncate — рефакторинг их
   только переносит, не изменяет.
+
+## Что осталось непроверенным
+
+Рефакторинг выполнялся без установки/запуска (ограничение сессии), поэтому
+нужен прогон после `poetry install --no-root && make build`:
+
+1. `make build` — C++ ядро (сенсор впервые содержит рабочий конвейер и
+   `set_seed`; код правился руками, компиляцию не гонял).
+2. `make test` — все тесты, включая новый `tests/test_reproducibility.py`
+   (проверит, что сиды реально дают бит-в-бит).
+3. `make lint` / `make typecheck` — после переименований и удалений.
+4. Тест GUI (pygame headless: логика цикла без окна) и подъём ruff-правил
+   N801/N802/N803/N806/N812 — сделать после того, как прогон станет
+   доступен.
+5. Первый реальный прогон `make train` подтвердит, что честные датчики
+   (квантование + шум + дифференцирование) дают обучаемую задачу; при
+   необходимости подобрать `differentiator_cutoff_hz`/`filter_cutoff_hz`
+   (сейчас 40/50 Гц) и `noise_std_*`.
 
 ## Риски
 

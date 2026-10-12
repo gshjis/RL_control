@@ -8,7 +8,7 @@ import time
 from collections import deque
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 import pygame
@@ -23,6 +23,9 @@ from packages.simulation.co.layout import (
 from packages.simulation.env.env import PendulumEnv
 from packages.simulation.gui import constants as C
 
+if TYPE_CHECKING:
+    from packages.controllers.base.base import Controller
+
 
 class PendulumViewer:
     """Принимает среду и контроллер, отображает симуляцию маятника."""
@@ -32,7 +35,7 @@ class PendulumViewer:
     def __init__(
         self,
         env: PendulumEnv,
-        controller: Any,
+        controller: Controller | None,
         max_simulation_time: float | None = DEFAULT_MAX_SIMULATION_TIME,
     ) -> None:
         """Принимает среду и необязательный контроллер, создаёт окно просмотра."""
