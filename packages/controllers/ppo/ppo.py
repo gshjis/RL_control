@@ -17,7 +17,7 @@ from stable_baselines3.common.vec_env import (
     sync_envs_normalization,
 )
 
-from packages.controllers.ppo.mode_config import PPOConfig
+from packages.controllers.ppo_config import PPOConfig
 from packages.simulation.co import (
     ControllerConfig,
 )

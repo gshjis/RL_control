@@ -1,47 +1,40 @@
-"""
-Основной скрипт: запуск симуляции перевёрнутого маятника с GUI.
-"""
+"""Обучение PPO-агента на перевёрнутом одно-звенном маятнике."""
 
 from __future__ import annotations
 
-from configs import CONTROLLER_CONFIG, PLANT_CONFIG, SENSOR_CONFIG, ppo_config, target
-from packages.controllers.base import (
-    make_energy_reward,
-    terminate_condition,
-    truncated_condition,
-)
 from packages.controllers.ppo import PPOController
-from packages.simulation.env import env_orcestrator
+from packages.experiment import ExperimentConfig, build_orchestrator
+from packages.presets import default
 
-MODEL_NAME = "checkpoints/ppo/pendl"
-reward_f = make_energy_reward(PLANT_CONFIG)
+DEFAULT_CHECKPOINT = "checkpoints/ppo/pendl"
 
 
-if __name__ == "__main__":
-    ppo_controller = PPOController(
-        ppo_config=ppo_config,
-        controller_config=CONTROLLER_CONFIG,
-    )
-
-    orchestrator = env_orcestrator.EnvOrchestrator(
-        PLANT_CONFIG,
-        SENSOR_CONFIG,
-        reward_f,
-        terminate_condition,
-        10,
-        CONTROLLER_CONFIG,
-        truncated_condition,
-        target,
-        ppo_config.max_episode_steps,
+def train(
+    experiment: ExperimentConfig,
+    checkpoint: str = DEFAULT_CHECKPOINT,
+) -> PPOController:
+    """Обучает PPO-агента и сохраняет модель, нормализатор и конфигурацию."""
+    controller = PPOController(
+        ppo_config=experiment.ppo,
+        controller_config=experiment.controller,
     )
 
     print("Обучение PPO...")
-    print(f"  total_timesteps = {ppo_config.total_timesteps}")
+    print(f"  total_timesteps = {experiment.ppo.total_timesteps}")
     print("  Пробел — сброс, C — мотор вкл/выкл, Q / ESC — выход")
-    print(f"  Инерция двигателя: τ = {PLANT_CONFIG.motor_time_constant} с")
-    ppo_controller.train(orchestrator)
+    print(f"  Инерция двигателя: τ = {experiment.plant.motor_time_constant} с")
 
-    # Сохранить модель, нормализатор и конфиги.
-    ppo_controller.save(MODEL_NAME)
-    print(f"Модель сохранена: {MODEL_NAME}")
+    controller.train(build_orchestrator(experiment))
+
+    controller.save(checkpoint)
+    print(f"Модель сохранена: {checkpoint}")
     print("Обучение PPO завершено!")
+    return controller
+
+
+def main() -> None:
+    train(default())
+
+
+if __name__ == "__main__":
+    main()

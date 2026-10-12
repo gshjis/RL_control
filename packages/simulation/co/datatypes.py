@@ -86,8 +86,14 @@ class PlantConfig:
             "b_2": self.b_2,
             "single_pendulum_mode": self.single_pendulum_mode,
             "motor_time_constant": self.motor_time_constant,
-            "init_q": self.init_q().tolist(),
-            "init_dq": self.init_dq().tolist(),
+            # Сериализуются параметры распределений, а не разовые выборки:
+            # to_dict() должен быть детерминированным (именно он попадает в
+            # артефакты эксперимента рядом с чекпоинтом).
+            "init_q_stats": self.init_q_stats.tolist(),
+            "init_dq_stats": self.init_dq_stats.tolist(),
+            "p_upright": self.p_upright,
+            "mean_f": self.mean_f,
+            "std_f": self.std_f,
             "dt": self.dt,
         }
 
@@ -109,6 +115,8 @@ class PlantConfig:
             init_dq_stats=self.init_dq_stats.copy(),
             dt=self.dt,
             p_upright=self.p_upright,
+            mean_f=self.mean_f,
+            std_f=self.std_f,
         )
 
 

@@ -95,24 +95,36 @@
 
 ## Этапы
 
-- [ ] **1. Baseline — воспроизводимость.** Объявить `stable-baselines3`;
+- [x] **1. Baseline — воспроизводимость.** Объявить `stable-baselines3`;
       выкинуть призрак-зависимости; удалить вложенный lock; цели
       `test/lint/typecheck/check` в `Makefile`; `conftest.py` с понятной
       ошибкой про `make build`; golden-тесты физики и reward.
-- [ ] **2. Импорты.** Один poetry-пакет: удалить path-deps и вложенные
+      *Прогон отложен: `poetry lock` / `make build` / `make check` требуют
+      сети и компиляции, запускать на этой машине нельзя. Сделано кодом.*
+- [x] **2. Импорты.** Один poetry-пакет: удалить path-deps и вложенные
       `pyproject.toml`; убрать `packages = [{include="*"}]` из `co`; перевести
       голые импорты на `packages.*`; `__init__.py` на промежуточные уровни.
-- [ ] **3. Конфигурация.** Frozen `ExperimentConfig` + именованные стратегии
+      *Порядок изменён: сначала удалены мёртвые поддеревья (этап 6.1/6.2),
+      затем убраны path-deps — так чинить импорты пришлось в двух файлах.*
+- [x] **3. Конфигурация.** Frozen `ExperimentConfig` + именованные стратегии
       (reward/terminate/truncate); общий `presets.py`; убрать дубли
       конфигов и расходящийся `TARGET`.
+      *`configs.py` удалён полностью — шим не понадобился, все точки входа
+      перешли на `packages.presets`/`packages.experiment`. `PPOConfig`
+      переехал в `packages/controllers/ppo_config.py`, чтобы слой
+      конфигурации не тянул torch/stable-baselines3 при импорте.*
 - [ ] **4. Layout наблюдений.** `packages/simulation/co/layout.py`
       (константы + `unpack`/`split_obs`), заменить магические индексы.
 - [ ] **5. Интерфейсы.** ABC `Controller.act()`; обучение — в `PPOTrainer`;
       публичные `env.plant`/`env.controller_dt`/`dt`; инверсия зависимости
       trainer ← env_factory.
-- [ ] **6. Чистка.** Удалить `pid/`, `custom/`, `reinforce/`, `ddpg/`,
+- [x] **6. Чистка.** Удалить `pid/`, `custom/`, `reinforce/`, `ddpg/`,
       `loggers/`, пустые файлы и их тесты; переименовать опечатки; свести
       README; почистить `.gitignore`.
+      *Сделано: удалены поддеревья, пустые файлы, `save_reward_comparison`
+      (не вызывался ниоткуда) и `NOISE`. Осталось: переименование опечаток
+      (`env_orcestrator`, `reset_angel_integral`, `check_linerised_position`)
+      и сводка README.*
 - [ ] **7. CLI.** `packages/cli.py`; обёртки вместо точек входа; артефакты
       `artifacts/<run_id>/`; общий `rollout()` + `plot_rollout()`.
 - [ ] **8. Сиды и датчики.** Seed → `np.random.Generator`; управляемый rng в

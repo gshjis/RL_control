@@ -60,11 +60,12 @@ make gui
 ## Проверки
 
 ```bash
-poetry run pytest
-poetry run ruff check .
-poetry run ruff format --check .
-poetry run mypy --explicit-package-bases --ignore-missing-imports .
+make check   # ruff + mypy + pytest
 ```
 
-Основные параметры модели, датчиков, контроллера и PPO находятся в
-[`configs.py`](configs.py).
+По отдельности: `make lint`, `make typecheck`, `make test`, `make format`.
+
+Основные параметры модели, датчиков, контроллера и PPO — в
+[`packages/presets.py`](packages/presets.py) (единый источник правды);
+описание эксперимента целиком —
+[`packages/experiment.py`](packages/experiment.py).
