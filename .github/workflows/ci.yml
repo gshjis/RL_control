@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: write
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -19,6 +22,28 @@ jobs:
         with:
           python-version: "3.12"
           cache: poetry
+
+      # pyproject.toml is edited more often than the lock file; instead of
+      # failing the whole run, refresh poetry.lock in place and push it back
+      # to the PR branch. The push uses GITHUB_TOKEN, so it does not spawn
+      # another workflow run (no loops), and this job continues with the
+      # refreshed lock.
+      - name: Refresh poetry.lock if stale
+        if: github.event_name == 'pull_request'
+        run: |
+          if poetry check --lock; then
+            echo "poetry.lock is up to date"
+          else
+            echo "poetry.lock is stale, regenerating"
+            poetry lock
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add poetry.lock
+            if ! git diff --cached --quiet; then
+              git commit -m "chore(deps): refresh poetry.lock [skip ci]"
+              git push
+            fi
+          fi
 
       - name: Install dependencies
         run: poetry install --no-root
