@@ -67,13 +67,18 @@ print('Functions:', [f for f in dir(m) if not f.startswith('_')])
 "
 ```
 
-Ожидаемый вывод:
+Ожидаемый вывод (список отличается по версиям — ищите `SensorBlock`,
+`rk4_step`, `update_physics_cpp`):
 ```
 C++ backend OK: <module 'co_cpp' from '.../packages/simulation/co/co_cpp.so'>
 Functions: ['Differentiator', 'NoiseForce', 'PlantParams', 'SensorBlock',
            'SignalFilter', 'State3', 'StateDot3',
-           'rk4_step', 'update_physics_cpp']
+           'rk4_step', 'set_noise_seed', 'update_physics_cpp']
 ```
+
+`SensorBlock.set_seed(n)` пересеивает пул шума датчиков, а
+`co_cpp.set_noise_seed(n)` — глобальный RNG шума силы; вместе они делают
+эпизод воспроизводимым после `env.reset(seed=...)`.
 
 ## Многоступенчатое обновление физики
 

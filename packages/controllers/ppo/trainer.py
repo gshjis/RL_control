@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Callable
+from functools import partial
 from typing import cast
 
 import gymnasium as gym
@@ -20,10 +21,8 @@ from stable_baselines3.common.vec_env import (
 
 from packages.controllers.ppo.ppo import PPOController
 from packages.controllers.ppo_config import PPOConfig
+from packages.experiment import EnvFactory
 from packages.simulation.co.datatypes import ControllerConfig
-
-# Фабрика сред: каждый вызов возвращает новую (не используемую) среду.
-EnvFactory = Callable[[], gym.Env]
 
 
 class ValidationCallback(BaseCallback):
@@ -130,8 +129,12 @@ class PPOTrainer:
 
     def fit(self, verbose: int = 1) -> PPOController:
         """Обучает политику и возвращает контроллер, готовый к применению."""
+        # Ранг в пуле сдвигает seed каждой среды (см. make_env_factory):
+        # параллельные эпизоды независимы, но весь запуск воспроизводим.
         train_vec_env = VecNormalize(
-            SubprocVecEnv([self._env_factory] * self._n_envs),
+            SubprocVecEnv(
+                [partial(self._env_factory, rank) for rank in range(self._n_envs)]
+            ),
             norm_obs=True,
             norm_reward=False,
         )
@@ -154,8 +157,9 @@ class PPOTrainer:
         )
 
         # Валидационная среда (отдельная, обёрнутая в VecNormalize).
+        # Ранг 0: eval всегда один и тот же детерминированный поток.
         eval_vec_env = VecNormalize(
-            DummyVecEnv([self._env_factory]),
+            DummyVecEnv([partial(self._env_factory, 0)]),
             norm_obs=True,
             # Keep validation rewards raw so mean_reward reflects the actual
             # reward function instead of VecNormalize's running statistics.

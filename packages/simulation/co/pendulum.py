@@ -72,6 +72,7 @@ class ObjectOfControl:
             self._dt,
             float(sensor_config.differentiator_cutoff_hz or 0.0),
             float(sensor_config.filter_cutoff_hz),
+            bool(sensor_config.exact_mode),
         )
 
     @property
@@ -145,12 +146,22 @@ class ObjectOfControl:
             self._cpp_sensor.get_telemetry(self._q, self._dq), dtype=np.float64
         )
 
-    def reset(self) -> None:
-        """Сбрасывает координаты, скорости, силу двигателя и датчики."""
-        self._q = self.__plant_config.init_q()
-        self._dq = self.__plant_config.init_dq()
+    def reset(self, rng: np.random.Generator | None = None) -> None:
+        """Сбрасывает координаты, скорости, силу двигателя и датчики.
+
+        Принимает опциональный генератор: среда передаёт сюда
+        ``self.np_random``, чтобы начальное состояние эпизода зависело
+        от ``reset(seed=...)``.
+        """
+        self._q = self.__plant_config.init_q(rng)
+        self._dq = self.__plant_config.init_dq(rng)
         self._motor_force = 0.0
         self._cpp_sensor.reset()
+
+    def set_seed(self, seed: int) -> None:
+        """Пересеивает шум силы и шумовой пул датчиков."""
+        _co_cpp.set_noise_seed(int(seed))
+        self._cpp_sensor.set_seed(int(seed))
 
     def get_clean_state(self) -> np.ndarray:
         """Возвращает объединённый вектор истинных координат и скоростей."""

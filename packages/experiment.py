@@ -41,7 +41,8 @@ if TYPE_CHECKING:
 
     from packages.simulation.env.env import PendulumEnv
 
-EnvFactory = Callable[[], gym.Env]
+EnvFactory = Callable[[int], gym.Env]
+"""Фабрика сред: принимает ранг в пуле (для сдвига seed) и создаёт среду."""
 
 TargetFn = Callable[[float], np.ndarray]
 TargetSpec = Literal["upright"]
@@ -91,6 +92,10 @@ class ExperimentConfig:
 
     n_envs: int = 10
 
+    # Базовый seed эксперимента: каждая среда в пуле получает seed + rank,
+    # eval-среда — seed + 0 (детерминированная валидация).
+    seed: int = 42
+
     # ── Фабрики: имя стратегии -> рабочая функция ──────────────────────────
     def make_reward(self) -> RewardFn:
         """Возвращает функцию награды для текущей конфигурации маятника."""
@@ -132,6 +137,7 @@ class ExperimentConfig:
             "truncate": self.truncate,
             "target": self.target,
             "n_envs": self.n_envs,
+            "seed": self.seed,
             "plant": self.plant.to_dict(),
             "sensor": self.sensor.to_dict(),
             "controller": self.controller.to_dict(),
@@ -143,11 +149,12 @@ def build_env(
     experiment: ExperimentConfig,
     *,
     max_episode_steps: int | None = None,
+    seed: int | None = None,
 ) -> PendulumEnv:
     """Создаёт одиночную Gymnasium-среду по описанию эксперимента.
 
     Импорт Gymnasium-слоя отложен: конфигурацию можно читать (и
-    сериализовать) без инициализации среды.
+    сериализовать) без инициализации среды. ``seed`` сеет первый reset.
     """
     from packages.simulation.env.env import PendulumEnv as _PendulumEnv
 
@@ -163,6 +170,7 @@ def build_env(
         experiment.controller,
         experiment.make_target(),
         experiment.make_truncate(),
+        seed=seed,
         **extra,
     )
 
@@ -170,14 +178,19 @@ def build_env(
 def make_env_factory(experiment: ExperimentConfig) -> EnvFactory:
     """Возвращает фабрику сред для пула параллельных окружений.
 
-    Каждый вызов создаёт новую среду — именно этого ждут ``SubprocVecEnv``
-    и ``DummyVecEnv``. Тренер получает фабрику, а не готовый пул, поэтому
-    слой контроллеров не зависит от устройства пула.
+    Фабрика принимает ``rank`` и сдвигает seed на этот ранг, поэтому
+    в ``SubprocVecEnv`` все среды независимы, но запуск воспроизводим:
+    одна и та же пара (seed, rank) даёт одинаковый поток начальных
+    состояний и шума.
     """
     max_episode_steps = experiment.ppo.max_episode_steps
 
-    def factory() -> gym.Env:
-        return build_env(experiment, max_episode_steps=max_episode_steps)
+    def factory(rank: int = 0) -> gym.Env:
+        return build_env(
+            experiment,
+            max_episode_steps=max_episode_steps,
+            seed=experiment.seed + rank,
+        )
 
     return factory
 

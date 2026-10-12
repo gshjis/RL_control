@@ -29,6 +29,7 @@ class PendulumEnv(gym.Env):
         target: Callable[[float], np.ndarray],
         truncated_condition: Callable[[np.ndarray, np.ndarray], bool],
         max_episode_steps: int = DEFAULT_MAX_EPISODE_STEPS,
+        seed: int | None = None,
     ) -> None:
         """Принимает модели, функции среды и конфигурацию шага."""
         super().__init__()
@@ -37,6 +38,10 @@ class PendulumEnv(gym.Env):
         self._target: Callable[[float], np.ndarray] = target
         self._plant_config: PlantConfig = plant_config
         self._sensor_config: SensorConfig = sensor_config
+        # Первый reset() сеет из этого значения: параллельные среды получают
+        # разные seed+rank, эпизоды после первого продолжают поток rng.
+        self._initial_seed = seed
+        self._seeded_once = False
 
         self._plant: ObjectOfControl = ObjectOfControl(plant_config, sensor_config)
 
@@ -95,13 +100,26 @@ class PendulumEnv(gym.Env):
     def reset(
         self, *, seed: int | None = None, options: dict[str, Any] | None = None
     ) -> tuple[np.ndarray, dict[str, Any]]:
-        """Принимает seed и параметры, возвращает начальное наблюдение и метаданные."""
-        super().reset()
+        """Принимает seed и параметры, возвращает начальное наблюдение и метаданные.
+
+        С ``seed`` (или с ``initial_seed`` конструктора на первом reset)
+        сидируются начальное состояние (через ``self.np_random``), шумовой
+        пул датчиков и шум силы — эпизод воспроизводим побитово.
+        """
+        effective_seed = seed
+        if effective_seed is None and not self._seeded_once:
+            effective_seed = self._initial_seed
+        self._seeded_once = True
+
+        super().reset(seed=effective_seed)
+
+        if effective_seed is not None:
+            self._plant.set_seed(effective_seed)
 
         self._t = 0
         self._episode_steps = 0
 
-        self._plant.reset()
+        self._plant.reset(rng=self.np_random)
         observation, _telemetry, _target_t = self._make_observation()
         return (observation, {})
 
