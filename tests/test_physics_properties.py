@@ -46,7 +46,11 @@ def _plant(**overrides: object) -> PlantConfig:
 
 
 def _sensor() -> SensorConfig:
-    """Возвращает конфигурацию датчиков без шума (сейчас отключён в C++)."""
+    """Возвращает конфигурацию датчиков с нулевым шумом.
+
+    Квантование энкодеров и фильтр при этом остаются: точный канал
+    без погрешностей — только exact_mode=True.
+    """
     return SensorConfig(
         noise_std_q=(0.0, 0.0, 0.0),
         noise_std_dq=(0.0, 0.0, 0.0),
@@ -168,7 +172,7 @@ def test_telemetry_layout_matches_documented_contract() -> None:
         init_q_stats=np.array([[0.05, 0.3, 0.0], [0.0, 0.0, 0.0]]),
         init_dq_stats=np.array([[0.01, 0.02, 0.03], [0.0, 0.0, 0.0]]),
     )
-    pendulum = ObjectOfControl(plant, _sensor())
+    pendulum = ObjectOfControl(plant, SensorConfig(exact_mode=True, seed=0))
     clean_state = pendulum.get_clean_state()
     telemetry = pendulum.get_telemetry()
 
