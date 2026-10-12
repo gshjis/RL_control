@@ -59,6 +59,7 @@ def _make_ppo_config(plant: PlantConfig, controller: ControllerConfig) -> PPOCon
         net_arch=net_arch,
     )
 
+
 TargetFn = Callable[[float], np.ndarray]
 TargetSpec = Literal["upright"]
 

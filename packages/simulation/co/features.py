@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+
 import numpy as np
 
 from packages.simulation.co.datatypes import ControllerConfig, PlantConfig
@@ -80,7 +82,6 @@ def get_obs_dim(plant: PlantConfig, controller: ControllerConfig) -> int:
 
 
 # ── Legacy FeatureConfig (для совместимости с тестами feature-ветки) ────────
-from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)

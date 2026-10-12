@@ -101,6 +101,7 @@ def _make_experiment(
 
 # ── 4 основных кейса ────────────────────────────────────────────────────────
 
+
 def single_pendulum_no_pos_control(**plant_overrides: object) -> ExperimentConfig:
     """Одно звено, без позиционного управления: 4 признака [sinθ1, cosθ1, dθ1, dx]."""
     plant = _base_plant(single_pendulum_mode=True, **plant_overrides)
@@ -117,24 +118,20 @@ def single_pendulum_pos_control(**plant_overrides: object) -> ExperimentConfig:
 
 def double_pendulum_no_pos_control(**plant_overrides: object) -> ExperimentConfig:
     """Два звена, без позиционного управления: 7 признаков + sinθ2, cosθ2, dθ2."""
-    plant = _base_plant(
-        single_pendulum_mode=False, m2=0.05, l2=0.2, **plant_overrides
-    )
+    plant = _base_plant(single_pendulum_mode=False, m2=0.05, l2=0.2, **plant_overrides)
     controller = _base_controller(position_controlled=False)
     return _make_experiment(plant, controller, name="ppo_double_no_pos")
 
 
 def double_pendulum_pos_control(**plant_overrides: object) -> ExperimentConfig:
     """Два звена, с позиционным управлением: 8 признаков + x_err."""
-    plant = _base_plant(
-        single_pendulum_mode=False, m2=0.05, l2=0.2, **plant_overrides
-    )
+    plant = _base_plant(single_pendulum_mode=False, m2=0.05, l2=0.2, **plant_overrides)
     controller = _base_controller(position_controlled=True)
     return _make_experiment(plant, controller, name="ppo_double_pos")
 
 
 def default() -> ExperimentConfig:
-    """Возвращает базовую конфигурацию обучения PPO на одно-звенном маятнике (как single_pendulum_no_pos_control)."""
+    """Базовая конфигурация PPO (single_pendulum_no_pos_control)."""
     return single_pendulum_no_pos_control()
 
 
