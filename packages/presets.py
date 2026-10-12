@@ -45,6 +45,7 @@ def default() -> ExperimentConfig:
             cart_sensor_resolution=0.0001,
             noise_std_q=(0.0005, 0.002, 0.002),
             noise_std_dq=(0.005, 0.01, 0.01),
+            exact_mode=True,
         ),
         controller=ControllerConfig(
             dt=0.01,
