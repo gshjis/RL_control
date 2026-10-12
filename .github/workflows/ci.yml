@@ -33,17 +33,25 @@ jobs:
         run: |
           if poetry check --lock; then
             echo "poetry.lock is up to date"
-          else
-            echo "poetry.lock is stale, regenerating"
-            poetry lock
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add poetry.lock
-            if ! git diff --cached --quiet; then
-              git commit -m "chore(deps): refresh poetry.lock [skip ci]"
-              git push
-            fi
+            exit 0
           fi
+          echo "poetry.lock is stale, regenerating"
+          poetry lock
+          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
+            echo "Fork PR: refreshed lock stays in the runner, not pushed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add poetry.lock
+          if git diff --cached --quiet; then
+            echo "Lock content unchanged"
+            exit 0
+          fi
+          git commit -m "chore(deps): refresh poetry.lock [skip ci]"
+          # actions/checkout leaves a detached HEAD in PR runs; push the
+          # current commit onto the PR branch explicitly.
+          git push origin "HEAD:${{ github.head_ref }}"
 
       - name: Install dependencies
         run: poetry install --no-root
