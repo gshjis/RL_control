@@ -38,23 +38,23 @@ def _default_ppo_config(plant: PlantConfig, controller: ControllerConfig) -> PPO
 
 
 def _base_plant(**overrides: object) -> PlantConfig:
-    """Базовая конфигурация растения с переопределениями."""
+    """Базовая конфигурация растения — точно как в рабочем коммите 429e74a."""
     defaults: dict[str, object] = {
         "M": 1.0,
-        "m1": 0.05,
-        "l1": 0.2,
+        "m1": 0.3,
+        "l1": 1.0,
         "m2": 0.0,
         "l2": 0.0,
         "g": -9.81,
-        "b_c": 0.01,
-        "b_1": 0.001,
-        "b_2": 0.001,
+        "b_c": 0.0,
+        "b_1": 0.0,
+        "b_2": 0.0,
         "single_pendulum_mode": True,
-        "init_q_stats": np.array([[0.0, np.pi, 0.0], [0.01, 0.00, 0.01]]),
-        "init_dq_stats": np.array([[0.0, 0.0, 0.0], [0.0, 0.00, 0.01]]),
-        "dt": 0.001,
-        "motor_time_constant": 0.01,
-        "p_upright": 0.08,  # 8% стартов в верхней точке (для разнообразия)
+        "init_q_stats": np.array([[0.0, np.pi, 0.0], [0.1, 0.1, 0.0]]),
+        "init_dq_stats": np.array([[0.0, 0.0, 0.0], [0.1, 0.1, 0.0]]),
+        "dt": 0.0005,
+        "motor_time_constant": 0.0,
+        "p_upright": 0.01,
     }
     defaults.update(overrides)
     return PlantConfig(**defaults)  # type: ignore[arg-type]
