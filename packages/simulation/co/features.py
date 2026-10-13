@@ -24,21 +24,33 @@ def build_features_auto(
     telemetry: np.ndarray,
     target: np.ndarray,
 ) -> np.ndarray:
-    """Автоматически строит вектор признаков для НС из телеметрии и цели.
+    """TEMPORARY: Old 14-input architecture (telemetry 8 + target 6).
 
-    4 кейса на основе конфигурации:
-    - single_pendulum_mode + position_controlled=False: 4 признака
-      [sinθ1, cosθ1, dθ1, dx]
-    - single_pendulum_mode + position_controlled=True: 5 признаков
-      [sinθ1, cosθ1, dθ1, dx, x - x_target]
-    - double pendulum + position_controlled=False: 7 признаков
-      [sinθ1, cosθ1, dθ1, dx, sinθ2, cosθ2, dθ2]
-    - double pendulum + position_controlled=True: 8 признаков
-      [sinθ1, cosθ1, dθ1, dx, sinθ2, cosθ2, dθ2, x - x_target]
-
-    Абсолютная позиция тележки (x) НЕ включается — только dx и ошибка позиции.
-    Это обеспечивает переносимость политики на реальную аппаратуру.
+    Original 14-dim observation:
+    - telemetry (8): [x, cosθ1, sinθ1, cosθ2, sinθ2, ẋ, θ̇1, θ̇2]
+    - target (6):  [x_t, cosθ1_t, sinθ1_t, cosθ2_t, sinθ2_t, ẋ_t]
     """
+    if telemetry.shape[0] < TELEMETRY_DIM:
+        raise ValueError(f"telemetry must have at least {TELEMETRY_DIM} components")
+    if target.shape[0] < 6:
+        raise ValueError("target must have at least 6 components for 14-dim obs")
+
+    # Concatenate telemetry (8) + target (6) = 14
+    features = np.concatenate([
+        telemetry[:TELEMETRY_DIM],      # 8 values
+        target[:6],                      # 6 values
+    ]).astype(np.float64)
+
+    return features
+
+
+def _build_features_auto_new(
+    plant: PlantConfig,
+    controller: ControllerConfig,
+    telemetry: np.ndarray,
+    target: np.ndarray,
+) -> np.ndarray:
+    """Новая архитектура: 4/5/7/8 признаков (sin/cos + velocities + pos error)."""
     if telemetry.shape[0] < TELEMETRY_DIM:
         raise ValueError(f"telemetry must have at least {TELEMETRY_DIM} components")
     if target.shape[0] < 1:
@@ -69,13 +81,16 @@ def build_features_auto(
 
 
 def get_obs_dim(plant: PlantConfig, controller: ControllerConfig) -> int:
-    """Возвращает размерность наблюдения для заданных конфигов."""
-    # 4 базовых (sinθ1, cosθ1, dθ1, dx)
+    """TEMPORARY: Returns 14 for old architecture (telemetry 8 + target 6)."""
+    # Old 14-dim: 8 telemetry + 6 target
+    return 14
+
+
+def _get_obs_dim_new(plant: PlantConfig, controller: ControllerConfig) -> int:
+    """Новая архитектура: 4/5/7/8 признаков."""
     dim = 4
-    # +1 если позиционное управление
     if controller.position_controlled:
         dim += 1
-    # +3 если двухзвенный
     if not plant.single_pendulum_mode:
         dim += 3
     return dim
