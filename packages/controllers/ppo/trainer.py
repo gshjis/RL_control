@@ -67,6 +67,7 @@ class ValidationCallback(BaseCallback):
             sync_envs_normalization(train_vec_norm, self.eval_env)
 
         episode_rewards: list[float] = []
+        final_cos_theta1_list: list[float] = []
         for _ in range(self.n_eval_episodes):
             obs_any = self.eval_env.reset()
             # VecNormalize.reset() returns np.ndarray for vectorized envs
@@ -103,6 +104,7 @@ class ValidationCallback(BaseCallback):
             done = False
             ep_reward = 0.0
             steps = 0
+            final_cos_theta1 = cos_theta1  # track final cos(theta1)
             while not done and steps < self.max_episode_steps:
                 actions, _ = self.model.predict(
                     cast(np.ndarray, obs_arr), deterministic=True
@@ -115,10 +117,22 @@ class ValidationCallback(BaseCallback):
                 assert isinstance(obs_arr, np.ndarray), (
                     f"Expected ndarray, got {type(obs_arr)}"
                 )
+                # Get raw observation for cos(theta1) tracking
+                obs_raw = vec_norm.unnormalize_obs(obs_arr)
+                assert isinstance(obs_raw, np.ndarray)
+                final_cos_theta1 = (
+                    float(obs_raw[0, 1]) if obs_raw.ndim == 2 else float(obs_raw[1])
+                )
                 ep_reward += float(rewards[0])
                 steps += 1
                 done = bool(dones[0])
             episode_rewards.append(ep_reward)
+            final_cos_theta1_list.append(final_cos_theta1)
+            if self.verbose:
+                print(
+                    f"  [Validation] Episode done: reward={ep_reward:.3f}, "
+                    f"steps={steps}, final_cos(theta1)={final_cos_theta1:.3f}"
+                )
 
         if not episode_rewards:
             if self.verbose:
@@ -126,7 +140,9 @@ class ValidationCallback(BaseCallback):
             return
 
         mean_reward = float(np.mean(episode_rewards))
+        mean_final_cos = float(np.mean(final_cos_theta1_list)) if final_cos_theta1_list else 0.0
         self.logger.record("eval/mean_reward", mean_reward)
+        self.logger.record("eval/mean_final_cos_theta1", mean_final_cos)
         self.logger.dump(self.num_timesteps)
 
         # Сохраняем отдельный snapshot после каждой валидации. Помимо весов
@@ -144,7 +160,9 @@ class ValidationCallback(BaseCallback):
         if self.verbose:
             print(
                 f"[Eval] timesteps={self.num_timesteps} | "
-                f"mean_reward={mean_reward:.4f} | saved={checkpoint_path}.zip"
+                f"mean_reward={mean_reward:.4f} | "
+                f"mean_final_cos(theta1)={mean_final_cos:.3f} | "
+                f"saved={checkpoint_path}.zip"
             )
 
 
