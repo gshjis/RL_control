@@ -77,7 +77,8 @@ class ValidationCallback(BaseCallback):
             )
             # Денормализуем наблюдение, чтобы получить RAW признаки
             # (VecNormalize хранит running mean/std и может вернуть исходные значения)
-            obs_raw = self.eval_env.unnormalize_obs(obs_arr)
+            vec_norm = cast(VecNormalize, self.eval_env)
+            obs_raw = vec_norm.unnormalize_obs(obs_arr)
             # Проверяем стартовое положение: cos(theta1) в RAW наблюдении
             # В features (4/5/7/8) cos_theta1 на индексе 1
             cos_theta1 = (
