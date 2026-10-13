@@ -528,14 +528,13 @@ class PendulumViewer:
     def _draw_hud(self) -> None:
         """Рисует текущее состояние, награду и управляющее воздействие."""
         # Чистое состояние (углы в радианах), а не телеметрия датчика.
-        q = self._plant.q
-        dq = self._plant.dq
+        clean = self._plant.get_clean_state()
         lines = [
             f"t = {self._sim_time:6.2f} s",
-            f"x  = {q[CLEAN_IDX_X]:+7.3f} m",
-            f"th1= {q[CLEAN_IDX_T1]:+7.3f} rad",
-            f"th2= {q[CLEAN_IDX_T2]:+7.3f} rad",
-            f"dx = {dq[CLEAN_IDX_DX]:+7.3f} m/s",
+            f"x  = {clean[CLEAN_IDX_X]:+7.3f} m",
+            f"th1= {clean[CLEAN_IDX_T1]:+7.3f} rad",
+            f"th2= {clean[CLEAN_IDX_T2]:+7.3f} rad",
+            f"dx = {clean[CLEAN_IDX_DX]:+7.3f} m/s",
             f"F  = {self._last_action:+7.2f} N",
             f"reward = {self._reward:+.3f}",
         ]
