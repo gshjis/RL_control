@@ -24,7 +24,11 @@ from packages.simulation.co.datatypes import ControllerConfig
 
 
 class ValidationCallback(BaseCallback):
-    """Оценивает PPO в отдельной среде и сохраняет результаты проверки."""
+    """Оценивает PPO в отдельной среде и сохраняет результаты проверки.
+
+    Валидация запускается только на эпизодах, стартующих в НИЗУ (theta=0, cos=1).
+    Эпизоды, стартующие ВВЕРХУ (theta=pi, cos=-1), пропускаются — там тривиально.
+    """
 
     def __init__(
         self,
@@ -34,6 +38,7 @@ class ValidationCallback(BaseCallback):
         max_episode_steps: int = 1000,
         checkpoint_dir: str = "checkpoints/ppo/validation",
         verbose: int = 1,
+        upright_cos_threshold: float = -0.5,  # cos(theta) < -0.5 => upright
     ) -> None:
         """Принимает среду и параметры оценки, сохраняет их для callback."""
         super().__init__(verbose)
@@ -43,6 +48,7 @@ class ValidationCallback(BaseCallback):
         self.max_episode_steps = int(max_episode_steps)
         self.checkpoint_dir = checkpoint_dir
         self._last_eval_timestep = 0
+        self._upright_cos_threshold = upright_cos_threshold
 
     def _on_step(self) -> bool:
         """Проверяет частоту оценки и возвращает признак продолжения обучения."""
@@ -63,6 +69,21 @@ class ValidationCallback(BaseCallback):
         episode_rewards: list[float] = []
         for _ in range(self.n_eval_episodes):
             obs = self.eval_env.reset()
+            # Проверяем стартовое положение: cos(theta1) в наблюдении
+            # В raw observation (telemetry || target) cos_theta1 на индексе 1
+            # В features (4/5/7/8) cos_theta1 на индексе 1
+            # Оба случая: индекс 1 = cos(theta1)
+            cos_theta1 = float(obs[0, 1]) if obs.ndim == 2 else float(obs[1])
+
+            # Пропускаем эпизоды, стартующие ВВЕРХУ (cos ≈ -1)
+            if cos_theta1 < self._upright_cos_threshold:
+                if self.verbose:
+                    print(
+                        f"  [Validation] Skip upright start: "
+                        f"cos(theta1)={cos_theta1:.3f}"
+                    )
+                continue
+
             done = False
             ep_reward = 0.0
             steps = 0
@@ -75,6 +96,11 @@ class ValidationCallback(BaseCallback):
                 steps += 1
                 done = bool(dones[0])
             episode_rewards.append(ep_reward)
+
+        if not episode_rewards:
+            if self.verbose:
+                print("  [Validation] All episodes skipped (upright starts)")
+            return
 
         mean_reward = float(np.mean(episode_rewards))
         self.logger.record("eval/mean_reward", mean_reward)
@@ -170,6 +196,7 @@ class PPOTrainer:
             max_episode_steps=self._ppo_config.max_episode_steps,
             checkpoint_dir=self._checkpoint_dir,
             verbose=verbose,
+            upright_cos_threshold=-0.5,
         )
 
         model.learn(

@@ -17,23 +17,23 @@ from packages.simulation.co.datatypes import (
     PlantConfig,
     SensorConfig,
 )
-from packages.simulation.co.features import get_obs_dim
 
 
 def _default_ppo_config(plant: PlantConfig, controller: ControllerConfig) -> PPOConfig:
-    """Возвращает PPOConfig с net_arch, адаптированным под размерность наблюдения."""
-    obs_dim = get_obs_dim(plant, controller)
-    # Эвристика: размер скрытого слоя ~ 4-8x от входа, но не более 128
-    hidden = min(max(obs_dim * 6, 32), 128)
-    # Для малых входов (4-5) — 1 слой, для больших (7-8) — 2 слоя
-    net_arch = [hidden] if obs_dim <= 5 else [hidden, hidden]
+    """Возвращает PPOConfig с гиперпараметрами из рабочего коммита 429e74a.
 
+    В рабочей версии было: net_arch=[64, 64], ent_coef=0.05,
+    max_episode_steps=10000, gae_lambda=0.97.
+    1.5M шагов было достаточно для сходимости.
+    """
     return PPOConfig(
-        total_timesteps=3_500_000,
+        total_timesteps=1_500_000,
         eval_freq=100_000,
         n_eval_episodes=2,
-        max_episode_steps=2_000,
-        net_arch=net_arch,
+        max_episode_steps=10_000,  # было 2000 → вернули 10000
+        net_arch=[64, 64],  # было адаптивное [32] → вернули 2x64
+        ent_coef=0.05,  # было 0.0 → вернули 0.05 (важно для исследования)
+        gae_lambda=0.97,  # было 0.95 → вернули 0.97
     )
 
 
@@ -54,6 +54,7 @@ def _base_plant(**overrides: object) -> PlantConfig:
         "init_dq_stats": np.array([[0.0, 0.0, 0.0], [0.0, 0.00, 0.01]]),
         "dt": 0.001,
         "motor_time_constant": 0.01,
+        "p_upright": 0.08,  # 8% стартов в верхней точке (для разнообразия)
     }
     defaults.update(overrides)
     return PlantConfig(**defaults)  # type: ignore[arg-type]
