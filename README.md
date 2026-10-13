@@ -1,105 +1,69 @@
-# Управление перевёрнутым маятником
+# RL_control — Inverted Pendulum RL Simulator
 
-Проект для моделирования и управления тележкой с перевёрнутым маятником. В
-состав входят физическая модель на C++, датчики с шумом и квантованием,
-Gymnasium-среда, контроллер PPO и GUI на Pygame.
+Симулятор тележки с перевёрнутым маятником (1 или 2 звена) для обучения и развёртывания PPO-политик на микроконтроллерах.
 
-## Демо
+**Что умеет симулятор:**
+- Физика на C++ (RK4, dt=0.5мс): тележка + 1/2 звена, трение, инерция двигателя
+- Реальные датчики (opt-in): квантование энкодеров 4096 CPR, гауссовский шум, оценка скоростей конечными разностями + ФНЧ 40/50Гц
+- Идеальные датчики (по умолчанию): точные углы/скорости из физики — воспроизводимо, быстро
+- Gymnasium-совместимая среда: 4/5/7/8-мерное наблюдение (авто по конфигу)
+- PPO через Stable-Baselines3: обучение, чекпоинты, детерминированный инференс
+- Экспорт в INT8 для Arduino: квантование весов, генерация `.h`.
 
-![Демонстрация симуляции перевёрнутого маятника](demo.gif)
+---
 
-## Возможности
+## 4 варианта нейросети (память на Arduino)
 
-- симуляция одно- и двухзвенного маятника;
-- физическое ядро на C++ с Python-интерфейсом;
-- PPO-обучение через Stable-Baselines3;
-- настраиваемые награды, условия завершения и усечения эпизода;
-- телеметрия с шумом, разрешением энкодеров и фильтрацией;
-- визуализация, ручное управление и запись видео;
-- автоматические тесты, Ruff и mypy.
+| Вариант | Архитектура | Параметров | Flash (INT8) | RAM (активации) | Где используется |
+|---------|-------------|------------|--------------|-----------------|------------------|
+| **Tiny** | 4 → 16 → 1 | ~100 | 0.1 KB | 32 B | Тест квантования |
+| **Small** | 4 → 32 → 32 → 1 | ~1.1K | 1.1 KB | 64 B | Текущий пресет |
+| **Medium** | 7 → 64 → 64 → 1 | ~4.5K | 4.5 KB | 128 B | 2 звена |
+| **Large** | 8 → 128 → 128 → 1 | ~17K | 17 KB | 256 B | 2 звена + pos control |
 
-## Структура
+---
 
-- [`packages/experiment.py`](packages/experiment.py) — описание эксперимента
-  `ExperimentConfig` и фабрики сред;
-- [`packages/presets.py`](packages/presets.py) — пресеты конфигураций
-  (единый источник правды для всех точек входа);
-- [`packages/simulation/co`](packages/simulation/co) — физика (C++/pybind11),
-  датчики, разметка наблюдений и конфигурации (см. README пакета);
-- [`packages/simulation/env`](packages/simulation/env) — Gymnasium-среда;
-- [`packages/controllers/base`](packages/controllers/base) — интерфейс
-  контроллера, награды и условия завершения/усечения эпизода;
-- [`packages/controllers/ppo`](packages/controllers/ppo) — PPO: инференс
-  (`PPOController`) и обучение (`PPOTrainer`);
-- [`packages/simulation/gui`](packages/simulation/gui) — визуализация
-  на Pygame;
-- [`tests`](tests) — тесты;
-- [`PPO_train.py`](PPO_train.py) — обучение, [`run_gui.py`](run_gui.py) — GUI,
-  [`plot_creator.py`](plot_creator.py) — headless-графики,
-  [`train_and_evaluate_4_agents.py`](train_and_evaluate_4_agents.py) —
-  сравнение агентов с разной вероятностью старта в верхней точке.
+## Где инференсим
 
-## Установка
+| Платформа | Код | Формат модели |
+|-----------|-----|---------------|
+| **Python (обучение/оценка)** | `packages/controllers/ppo/ppo.py` → `PPOController.act()` | SB3 `.zip` + `_vecnormalize.pkl` + `_config.json` |
+| **Python (GUI)** | `packages/simulation/gui/gui.py` → `PendulumViewer` | то же |
+| **Arduino (embedded)** | `tools/export_quantize.py` → `model_weights.h` | C header: `int8_t` веса + scales + `forward_int8()` |
 
-Требуется Python 3.12, Poetry, CMake и C++-компилятор.
+---
+
+## Команды (Make)
 
 ```bash
-poetry install --no-root
+make build       # собрать C++ ядро (cmake + pybind11)
+make train       # обучить PPO (1.5M шагов, ~5 мин)
+make gui         # визуализация (Pygame), подхватит последний чекпоинт
+make plot        # headless график cos(θ₁) за 20 прогона
+make eval        # метрики + график для указанного чекпоинта
+make check       # ruff + mypy + pytest (63 теста)
 ```
+---
 
-## Запуск
+## Содержание (код)
 
-Сначала собрать физическое ядро:
+| Что | Файл |
+|-----|------|
+| **Единый CLI** | [`packages/cli.py`](packages/cli.py) |
+| **Конфиг эксперимента** | [`packages/experiment.py`](packages/experiment.py) |
+| **Рабочие пресеты** | [`packages/presets.py`](packages/presets.py) |
+| **PPO контроллер (инференс)** | [`packages/controllers/ppo/ppo.py`](packages/controllers/ppo/ppo.py) |
+| **PPO тренер (обучение)** | [`packages/controllers/ppo/trainer.py`](packages/controllers/ppo/trainer.py) |
+| **Gymnasium среда** | [`packages/simulation/env/env.py`](packages/simulation/env/env.py) |
+| **Физика C++** | [`packages/simulation/co/cpp/co_physics.cpp`](packages/simulation/co/cpp/co_physics.cpp) |
+| **Датчики C++** | [`packages/simulation/co/cpp/co_sensor.cpp`](packages/simulation/co/cpp/co_sensor.cpp) |
+| **Признаки (4/5/7/8 dim)** | [`packages/simulation/co/features.py`](packages/simulation/co/features.py) |
+| **Конфиги (Plant/Sensor/Controller)** | [`packages/simulation/co/datatypes.py`](packages/simulation/co/datatypes.py) |
+| **Экспорт в Arduino** | [`tools/export_quantize.py`](tools/export_quantize.py) |
+| **CI (GitHub Actions)** | [`.github/workflows/ci.yml`](.github/workflows/ci.yml) |
 
-```bash
-make build
-```
-
-Все команды есть в едином CLI (корневые скрипты — тонкие обёртки над ним):
-
-```bash
-poetry run python -m packages train --help
-poetry run python -m packages gui                      # визуализация
-poetry run python -m packages plot --runs 20           # график cos(theta1)
-poetry run python -m packages eval --model checkpoints/ppo/pendl
-poetry run python -m packages profile --duration 5     # профилирование ядра
-```
-
-То же через make:
-
-```bash
-make train   # обучение PPO
-make gui     # визуализация
-make plot    # headless-график прогона
-make eval    # метрики прогона + график
-```
-
-## Проверки
-
-```bash
-make check   # ruff + mypy + pytest
-```
-
-По отдельности: `make lint`, `make typecheck`, `make test`, `make format`.
-Те же проверки гоняет CI (`.github/workflows/ci.yml`) на каждый push.
-
-## Воспроизводимость
-
-- `ExperimentConfig.seed` (по умолчанию 42) сдвигается на ранг в пуле
-  сред — одинаковый запуск даёт одинаковые траектории;
-- `env.reset(seed=...)` сеет начальное состояние, шум датчиков и шум силы;
-- датчики по умолчанию **идеальные** (`SensorConfig.exact_mode = True`):
-  точные углы и скорости из физики. Честные датчики — флаг
-  `exact_mode = False`: квантование энкодеров, шум, оценка скоростей
-  дифференцированием, ФНЧ;
-- чекпоинты, обученные при другом режиме датчиков, несопоставимы —
-  при смене `exact_mode` модель переобучается (`make train`).
+---
 
 ## Лицензия
 
-MIT, см. [LICENSE](LICENSE).
-
-Основные параметры модели, датчиков, контроллера и PPO — в
-[`packages/presets.py`](packages/presets.py) (единый источник правды);
-описание эксперимента целиком —
-[`packages/experiment.py`](packages/experiment.py).
+MIT — см. [LICENSE](LICENSE).

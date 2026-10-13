@@ -4,6 +4,7 @@
     python -m packages gui    [--model NAME]
     python -m packages plot   [--model NAME] [--runs N] [--seconds S] [--output PATH]
     python -m packages eval   [--model NAME] [--runs N] [--seconds S] [--output DIR]
+    python -m packages record [--model NAME] [--duration S] [--max-steps N] [--fps N] [--output PATH]
     python -m packages profile [--duration S] [--plot]
 
 Тяжёлые зависимости (Stable-Baselines3, Pygame, matplotlib) подгружаются
@@ -18,6 +19,7 @@ import argparse
 import dataclasses
 import json
 from collections.abc import Sequence
+from datetime import datetime
 from pathlib import Path
 
 from packages.experiment import ExperimentConfig
@@ -160,6 +162,33 @@ def cmd_profile(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_record(args: argparse.Namespace) -> int:
+    """Записывает один прогон модели в MP4 (headless)."""
+    from packages.controllers.ppo.checkpoints import load_controller
+    from packages.experiment import build_env
+    from packages.simulation.gui import PendulumViewer
+
+    experiment = default()
+    env = build_env(experiment)
+
+    try:
+        controller = load_controller(args.model)
+        print(f"Загружена модель: {args.model}")
+    except FileNotFoundError:
+        print(f"Модель {args.model} не найдена — запись без контроллера.")
+        controller = None
+
+    viewer = PendulumViewer(env=env, controller=controller)
+    output = args.output or (PROJECT_ROOT / "recordings" / f"rollout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+    viewer.record_rollout(
+        duration=args.duration,
+        output_path=Path(output),
+        max_steps=args.max_steps,
+        fps=args.fps,
+    )
+    return 0
+
+
 # ── Разбор аргументов ─────────────────────────────────────────────────────
 def build_parser() -> argparse.ArgumentParser:
     """Возвращает готовый парсер CLI."""
@@ -226,6 +255,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="показать графики (открывает блокирующее окно)",
     )
     profile.set_defaults(handler=cmd_profile)
+
+    record = subparsers.add_parser("record", help="записать один прогон в MP4 (headless)")
+    record.add_argument(
+        "--model",
+        default=DEFAULT_MODEL,
+        help="имя чекпоинта; если файла нет — запись без контроллера",
+    )
+    record.add_argument(
+        "--duration",
+        type=float,
+        default=20.0,
+        help="длина прогона в секундах симуляции (по умолчанию: 20)",
+    )
+    record.add_argument(
+        "--max-steps",
+        type=int,
+        default=None,
+        help="максимум шагов симуляции (перекрывает --duration)",
+    )
+    record.add_argument(
+        "--fps",
+        type=int,
+        default=None,
+        help="FPS видео (по умолчанию: 1 / dt контроллера)",
+    )
+    record.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="куда сохранить .mp4 (по умолчанию: recordings/rollout_<timestamp>.mp4)",
+    )
+    record.set_defaults(handler=cmd_record)
 
     return parser
 
