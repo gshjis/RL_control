@@ -75,12 +75,13 @@ class ValidationCallback(BaseCallback):
             assert isinstance(obs_arr, np.ndarray), (
                 f"Expected ndarray, got {type(obs_arr)}"
             )
-            # Проверяем стартовое положение: cos(theta1) в наблюдении
-            # В raw observation (telemetry || target) cos_theta1 на индексе 1
+            # Денормализуем наблюдение, чтобы получить RAW признаки
+            # (VecNormalize хранит running mean/std и может вернуть исходные значения)
+            obs_raw = self.eval_env.unnormalize_obs(obs_arr)
+            # Проверяем стартовое положение: cos(theta1) в RAW наблюдении
             # В features (4/5/7/8) cos_theta1 на индексе 1
-            # Оба случая: индекс 1 = cos(theta1)
             cos_theta1 = (
-                float(obs_arr[0, 1]) if obs_arr.ndim == 2 else float(obs_arr[1])
+                float(obs_raw[0, 1]) if obs_raw.ndim == 2 else float(obs_raw[1])
             )
 
             # Пропускаем эпизоды, стартующие ВВЕРХУ (cos ≈ -1)
