@@ -24,33 +24,14 @@ def build_features_auto(
     telemetry: np.ndarray,
     target: np.ndarray,
 ) -> np.ndarray:
-    """TEMPORARY: Old 14-input architecture (telemetry 8 + target 6).
+    """Автоматическая архитектура: 4/5/7/8 признаков.
 
-    Original 14-dim observation:
-    - telemetry (8): [x, cosθ1, sinθ1, cosθ2, sinθ2, ẋ, θ̇1, θ̇2]
-    - target (6):  [x_t, cosθ1_t, sinθ1_t, cosθ2_t, sinθ2_t, ẋ_t]
+    Зависит от конфигурации:
+    - single_pendulum_mode=True, position_controlled=False: 4 (sinθ1, cosθ1, θ̇1, ẋ)
+    - single_pendulum_mode=True, position_controlled=True:  5 (+ x - x_target)
+    - single_pendulum_mode=False, position_controlled=False: 7 (+ sinθ2, cosθ2, θ̇2)
+    - single_pendulum_mode=False, position_controlled=True:  8 (+ x - x_target)
     """
-    if telemetry.shape[0] < TELEMETRY_DIM:
-        raise ValueError(f"telemetry must have at least {TELEMETRY_DIM} components")
-    if target.shape[0] < 6:
-        raise ValueError("target must have at least 6 components for 14-dim obs")
-
-    # Concatenate telemetry (8) + target (6) = 14
-    features = np.concatenate([
-        telemetry[:TELEMETRY_DIM],      # 8 values
-        target[:6],                      # 6 values
-    ]).astype(np.float64)
-
-    return features
-
-
-def _build_features_auto_new(
-    plant: PlantConfig,
-    controller: ControllerConfig,
-    telemetry: np.ndarray,
-    target: np.ndarray,
-) -> np.ndarray:
-    """Новая архитектура: 4/5/7/8 признаков (sin/cos + velocities + pos error)."""
     if telemetry.shape[0] < TELEMETRY_DIM:
         raise ValueError(f"telemetry must have at least {TELEMETRY_DIM} components")
     if target.shape[0] < 1:
@@ -81,13 +62,7 @@ def _build_features_auto_new(
 
 
 def get_obs_dim(plant: PlantConfig, controller: ControllerConfig) -> int:
-    """TEMPORARY: Returns 14 for old architecture (telemetry 8 + target 6)."""
-    # Old 14-dim: 8 telemetry + 6 target
-    return 14
-
-
-def _get_obs_dim_new(plant: PlantConfig, controller: ControllerConfig) -> int:
-    """Новая архитектура: 4/5/7/8 признаков."""
+    """Автоматическая размерность наблюдения: 4/5/7/8 признаков."""
     dim = 4
     if controller.position_controlled:
         dim += 1

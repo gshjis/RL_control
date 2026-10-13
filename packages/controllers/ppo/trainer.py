@@ -201,7 +201,7 @@ class PPOTrainer:
                 [partial(self._env_factory, rank) for rank in range(self._n_envs)]
             ),
             norm_obs=True,
-            norm_reward=False,
+            norm_reward=True,
         )
         model = SB3_PPO(
             self._ppo_config.policy,
