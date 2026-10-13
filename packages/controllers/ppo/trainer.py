@@ -79,6 +79,12 @@ class ValidationCallback(BaseCallback):
             # (VecNormalize хранит running mean/std и может вернуть исходные значения)
             vec_norm = cast(VecNormalize, self.eval_env)
             obs_raw = vec_norm.unnormalize_obs(obs_arr)
+            # unnormalize_obs может вернуть dict для Dict observation spaces,
+            # но у нас Box space -> всегда np.ndarray
+            assert isinstance(obs_raw, np.ndarray), (
+                f"Expected ndarray, got {type(obs_raw)}"
+            )
+            obs_raw = cast(np.ndarray, obs_raw)
             # Проверяем стартовое положение: cos(theta1) в RAW наблюдении
             # В features (4/5/7/8) cos_theta1 на индексе 1
             cos_theta1 = (
