@@ -69,11 +69,15 @@ class ValidationCallback(BaseCallback):
         episode_rewards: list[float] = []
         for _ in range(self.n_eval_episodes):
             obs = self.eval_env.reset()
+            # obs может быть np.ndarray или dict; векторные среды возвращают np.ndarray
+            obs_arr = obs[0] if isinstance(obs, tuple) else obs
             # Проверяем стартовое положение: cos(theta1) в наблюдении
             # В raw observation (telemetry || target) cos_theta1 на индексе 1
             # В features (4/5/7/8) cos_theta1 на индексе 1
             # Оба случая: индекс 1 = cos(theta1)
-            cos_theta1 = float(obs[0, 1]) if obs.ndim == 2 else float(obs[1])
+            cos_theta1 = (
+                float(obs_arr[0, 1]) if obs_arr.ndim == 2 else float(obs_arr[1])
+            )
 
             # Пропускаем эпизоды, стартующие ВВЕРХУ (cos ≈ -1)
             if cos_theta1 < self._upright_cos_threshold:
@@ -89,9 +93,12 @@ class ValidationCallback(BaseCallback):
             steps = 0
             while not done and steps < self.max_episode_steps:
                 actions, _ = self.model.predict(
-                    cast(np.ndarray, obs), deterministic=True
+                    cast(np.ndarray, obs_arr), deterministic=True
                 )
-                obs, rewards, dones, _ = self.eval_env.step(actions)
+                step_result = self.eval_env.step(actions)
+                obs = step_result[0]
+                rewards = step_result[1]
+                dones = step_result[2]
                 ep_reward += float(rewards[0])
                 steps += 1
                 done = bool(dones[0])

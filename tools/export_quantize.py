@@ -95,7 +95,10 @@ def export_model(
     # Ищем Linear слои
 
     # Пробуем разные варианты имен
-    w1 = b1 = w2 = b2 = None
+    w1: np.ndarray
+    b1: np.ndarray
+    w2: np.ndarray | None = None
+    b2: np.ndarray | None = None
 
     # Вариант 1: mlp_extractor.policy_net
     if "mlp_extractor.policy_net.0.weight" in state_dict:
@@ -117,6 +120,8 @@ def export_model(
 
     print(f"Layer 1: {w1.shape} -> {b1.shape}")
     if w2 is not None:
+        assert w2 is not None
+        assert b2 is not None
         print(f"Layer 2: {w2.shape} -> {b2.shape}")
 
     # Если 3 слоя (4->32->32->1), объединяем или берём последний
@@ -131,7 +136,16 @@ def export_model(
     b1_q, b1_scale, b1_zp = quantize_asymmetric(b1)
 
     # Layer 2
+    w2_q: np.ndarray
+    b2_q: np.ndarray
+    w2_scale: float
+    b2_scale: float
+    w2_zp: int
+    b2_zp: int
+
     if w2 is not None:
+        assert w2 is not None
+        assert b2 is not None
         w2_q, w2_scale, w2_zp = quantize_asymmetric(w2)
         b2_q, b2_scale, b2_zp = quantize_asymmetric(b2)
     else:
