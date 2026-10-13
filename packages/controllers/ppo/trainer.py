@@ -68,15 +68,16 @@ class ValidationCallback(BaseCallback):
 
         episode_rewards: list[float] = []
         for _ in range(self.n_eval_episodes):
-            obs = self.eval_env.reset()
-            # obs может быть np.ndarray или dict; векторные среды возвращают np.ndarray
-            obs_arr = obs[0] if isinstance(obs, tuple) else obs
+            obs_any = self.eval_env.reset()
+            # VecNormalize.reset() returns np.ndarray for vectorized envs
+            # Type: ignore because mypy doesn't know the exact return type
+            obs_arr = obs_any[0] if isinstance(obs_any, tuple) else obs_any  # type: ignore[index]
             # Проверяем стартовое положение: cos(theta1) в наблюдении
             # В raw observation (telemetry || target) cos_theta1 на индексе 1
             # В features (4/5/7/8) cos_theta1 на индексе 1
             # Оба случая: индекс 1 = cos(theta1)
             cos_theta1 = (
-                float(obs_arr[0, 1]) if obs_arr.ndim == 2 else float(obs_arr[1])
+                float(obs_arr[0, 1]) if obs_arr.ndim == 2 else float(obs_arr[1])  # type: ignore[index]
             )
 
             # Пропускаем эпизоды, стартующие ВВЕРХУ (cos ≈ -1)
@@ -96,12 +97,13 @@ class ValidationCallback(BaseCallback):
                     cast(np.ndarray, obs_arr), deterministic=True
                 )
                 step_result = self.eval_env.step(actions)
-                obs = step_result[0]
-                rewards = step_result[1]
-                dones = step_result[2]
-                ep_reward += float(rewards[0])
+                obs_next = step_result[0]  # type: ignore[index]
+                rewards = step_result[1]  # type: ignore[index]
+                dones = step_result[2]  # type: ignore[index]
+                obs_arr = obs_next[0] if isinstance(obs_next, tuple) else obs_next  # type: ignore[index]
+                ep_reward += float(rewards[0])  # type: ignore[index]
                 steps += 1
-                done = bool(dones[0])
+                done = bool(dones[0])  # type: ignore[index]
             episode_rewards.append(ep_reward)
 
         if not episode_rewards:
