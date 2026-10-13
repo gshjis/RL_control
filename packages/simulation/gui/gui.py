@@ -319,7 +319,9 @@ class PendulumViewer:
             stderr = proc.stderr.read() if proc.stderr is not None else b""
             returncode = proc.wait()
             if returncode != 0:
-                raise RuntimeError(f"ffmpeg ошибка: {stderr.decode(errors='replace')[-1000:]}")
+                raise RuntimeError(
+                    f"ffmpeg ошибка: {stderr.decode(errors='replace')[-1000:]}"
+                )
 
         print(f"Видео сохранено: {output_path}")
         return output_path

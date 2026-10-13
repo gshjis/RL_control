@@ -4,7 +4,8 @@
     python -m packages gui    [--model NAME]
     python -m packages plot   [--model NAME] [--runs N] [--seconds S] [--output PATH]
     python -m packages eval   [--model NAME] [--runs N] [--seconds S] [--output DIR]
-    python -m packages record [--model NAME] [--duration S] [--max-steps N] [--fps N] [--output PATH]
+    python -m packages record [--model NAME] [--duration S] [--max-steps N]
+    [--fps N] [--output PATH]
     python -m packages profile [--duration S] [--plot]
 
 Тяжёлые зависимости (Stable-Baselines3, Pygame, matplotlib) подгружаются
@@ -179,7 +180,8 @@ def cmd_record(args: argparse.Namespace) -> int:
         controller = None
 
     viewer = PendulumViewer(env=env, controller=controller)
-    output = args.output or (PROJECT_ROOT / "recordings" / f"rollout_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4")
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    output = args.output or (PROJECT_ROOT / "recordings" / f"rollout_{timestamp}.mp4")
     viewer.record_rollout(
         duration=args.duration,
         output_path=Path(output),
@@ -256,7 +258,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     profile.set_defaults(handler=cmd_profile)
 
-    record = subparsers.add_parser("record", help="записать один прогон в MP4 (headless)")
+    record = subparsers.add_parser(
+        "record", help="записать один прогон в MP4 (headless)"
+    )
     record.add_argument(
         "--model",
         default=DEFAULT_MODEL,
