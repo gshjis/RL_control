@@ -74,7 +74,9 @@ def export_model(
     controller = PPOController.load(model_path)
 
     # Получаем веса политики (SB3 PPO policy)
-    policy = controller._policy
+    if controller.model is None:
+        raise RuntimeError(f"Модель не загружена: {model_path}")
+    policy = controller.model.policy
 
     # Извлекаем веса MLP
     # SB3 MlpPolicy: features_extractor -> mlp_extractor -> action_net/value_net

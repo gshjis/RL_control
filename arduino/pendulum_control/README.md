@@ -57,6 +57,9 @@ pendulum_control/
 
 # Или PlatformIO
 pio run -t upload
+
+# Или одной командой из корня проекта: веса + сборка
+python -m packages firmware --model-dir /полный/путь/к/папке/с/моделью
 ```
 
 ---
@@ -70,7 +73,11 @@ pio run -t upload
 cd /home/gshjis/Projects/RL_control
 poetry run python -m packages train --total-timesteps 3500000
 
-# 2. Экспорт + квантование
+# 2. Экспорт + квантование + сборка прошивки
+#    (в папке должен лежать ровно один чекпоинт)
+poetry run python -m packages firmware --model-dir /путь/к/папке/с/одной/моделью
+
+# Только квантование, без сборки:
 poetry run python tools/export_quantize.py \
   --model checkpoints/ppo/validation/model_3500000 \
   --output arduino/pendulum_control/model_weights.h

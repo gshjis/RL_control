@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from packages.cli import _experiment_from_args, build_parser, cmd_gui, cmd_plot
+from packages.cli import (
+    _discover_checkpoint,
+    _experiment_from_args,
+    build_parser,
+    cmd_firmware,
+    cmd_gui,
+    cmd_plot,
+)
 
 
 def test_train_parses_overrides() -> None:
@@ -58,6 +67,55 @@ def test_experiment_from_args_applies_overrides() -> None:
     assert experiment.ppo.total_timesteps == 7
     assert experiment.n_envs == 3
     assert experiment.seed == 42
+
+
+def test_firmware_requires_model_dir() -> None:
+    """firmware без --model-dir — ошибка использования, а не дефолт."""
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["firmware"])
+
+
+def test_firmware_defaults_follow_preset() -> None:
+    """firmware берёт max_force из пресета и скетч по умолчанию."""
+    args = build_parser().parse_args(["firmware", "--model-dir", "/tmp/model"])
+
+    assert args.handler is cmd_firmware
+    assert args.model_dir == Path("/tmp/model")
+    assert args.max_force == 24.0
+    assert args.hidden_dim == 32
+    assert args.sketch.name == "pendulum_control"
+    assert args.output_dir is None
+
+
+def test_discover_checkpoint_returns_name_without_suffix(tmp_path: Path) -> None:
+    """Итоговый чекпоинт <name>_model.zip превращается в префикс <name>."""
+    (tmp_path / "pendl_model.zip").touch()
+    (tmp_path / "pendl_config.json").touch()
+    (tmp_path / "pendl_vecnormalize.pkl").touch()
+
+    assert _discover_checkpoint(tmp_path) == tmp_path / "pendl"
+
+
+def test_discover_checkpoint_accepts_validation_snapshot(tmp_path: Path) -> None:
+    """Снимок валидации <name>.zip тоже поддерживается."""
+    (tmp_path / "model_100000.zip").touch()
+
+    assert _discover_checkpoint(tmp_path) == tmp_path / "model_100000"
+
+
+def test_discover_checkpoint_rejects_ambiguous_folder(tmp_path: Path) -> None:
+    """Два чекпоинта в папке — явная ошибка, а не случайный выбор."""
+    (tmp_path / "a_model.zip").touch()
+    (tmp_path / "b_model.zip").touch()
+
+    with pytest.raises(SystemExit):
+        _discover_checkpoint(tmp_path)
+
+
+def test_discover_checkpoint_requires_existing_dir(tmp_path: Path) -> None:
+    """Несуществующая папка — SystemExit с понятным сообщением."""
+    with pytest.raises(SystemExit):
+        _discover_checkpoint(tmp_path / "missing")
 
 
 def test_unknown_command_is_a_usage_error() -> None:

@@ -7,6 +7,8 @@
     python -m packages record [--model NAME] [--duration S] [--max-steps N]
     [--fps N] [--output PATH]
     python -m packages profile [--duration S] [--plot]
+    python -m packages firmware --model-dir DIR [--sketch DIR]
+    [--output-dir DIR] [--max-force F] [--hidden-dim N]
 
 Тяжёлые зависимости (Stable-Baselines3, Pygame, matplotlib) подгружаются
 только внутри нужной команды, поэтому ``--help`` работает мгновенно.
@@ -19,6 +21,9 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import shutil
+import subprocess
+import sys
 from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
@@ -29,6 +34,8 @@ from packages.presets import default
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 ARTIFACTS_ROOT = PROJECT_ROOT / "artifacts"
 PLOTS_ROOT = PROJECT_ROOT / "plots"
+DEFAULT_SKETCH = PROJECT_ROOT / "arduino" / "pendulum_control"
+FIRMWARE_ROOT = ARTIFACTS_ROOT / "firmware"
 
 DEFAULT_CHECKPOINT = str(PROJECT_ROOT / "checkpoints" / "ppo" / "pendl")
 DEFAULT_MODEL = str(
@@ -53,6 +60,33 @@ def _experiment_from_args(args: argparse.Namespace) -> ExperimentConfig:
         experiment = dataclasses.replace(experiment, n_envs=n_envs)
 
     return experiment
+
+
+def _discover_checkpoint(model_dir: Path) -> Path:
+    """Находит единственный чекпоинт в папке и возвращает путь без суффиксов.
+
+    Поддерживает оба соглашения об именовании: ``<name>_model.zip`` (итоговый
+    чекпоинт обучения) и ``<name>.zip`` (снимок валидации).
+    """
+    if not model_dir.is_dir():
+        raise SystemExit(f"Папка с моделью не найдена: {model_dir}")
+
+    candidates = sorted(model_dir.glob("*_model.zip"))
+    if not candidates:
+        candidates = sorted(model_dir.glob("*.zip"))
+    if not candidates:
+        raise SystemExit(
+            f"В папке нет чекпоинта (*_model.zip или *.zip): {model_dir}"
+        )
+    if len(candidates) > 1:
+        listing = "\n  ".join(path.name for path in candidates)
+        raise SystemExit(f"В папке несколько чекпоинтов, оставьте один:\n  {listing}")
+
+    name = candidates[0].name
+    for suffix in ("_model.zip", ".zip"):
+        if name.endswith(suffix):
+            return model_dir / name[: -len(suffix)]
+    raise SystemExit(f"Не удалось разобрать имя чекпоинта: {name}")
 
 
 def _run_rollout(args: argparse.Namespace):
@@ -191,6 +225,67 @@ def cmd_record(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_firmware(args: argparse.Namespace) -> int:
+    """Квантует чекпоинт в model_weights.h и собирает прошивку PlatformIO."""
+    checkpoint = _discover_checkpoint(args.model_dir)
+    sketch = args.sketch.resolve()
+    platformio_ini = sketch / "platformio.ini"
+    if not platformio_ini.is_file():
+        raise SystemExit(f"Не найден {platformio_ini}")
+
+    weights = sketch / "model_weights.h"
+    print(f"Модель: {checkpoint}")
+    print(f"Веса:   {weights}")
+
+    try:
+        subprocess.run(
+            [
+                sys.executable,
+                str(PROJECT_ROOT / "tools" / "export_quantize.py"),
+                "--model",
+                str(checkpoint),
+                "--output",
+                str(weights),
+                "--max-force",
+                str(args.max_force),
+                "--hidden-dim",
+                str(args.hidden_dim),
+            ],
+            cwd=PROJECT_ROOT,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        print(f"Экспорт весов завершился с кодом {exc.returncode}", file=sys.stderr)
+        return exc.returncode or 1
+
+    pio = shutil.which("pio") or shutil.which("platformio")
+    if pio is None:
+        raise SystemExit(
+            "PlatformIO не найден. Установите: pip install platformio "
+            "(или poetry add --group dev platformio)"
+        )
+
+    try:
+        subprocess.run([pio, "run"], cwd=sketch, check=True)
+    except subprocess.CalledProcessError as exc:
+        print(f"Сборка прошивки завершилась с кодом {exc.returncode}", file=sys.stderr)
+        return exc.returncode or 1
+
+    build_root = sketch / ".pio" / "build"
+    firmware_files = sorted(build_root.glob("*/firmware.hex"))
+    if not firmware_files:
+        raise SystemExit(f"Сборка прошла, но firmware.hex не найден в {build_root}")
+
+    out_dir = args.output_dir or (FIRMWARE_ROOT / checkpoint.name)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for firmware in firmware_files:
+        env_name = firmware.parent.name
+        target = out_dir / f"firmware_{checkpoint.name}_{env_name}.hex"
+        shutil.copy2(firmware, target)
+        print(f"Прошивка: {target} ({target.stat().st_size} байт)")
+    return 0
+
+
 # ── Разбор аргументов ─────────────────────────────────────────────────────
 def build_parser() -> argparse.ArgumentParser:
     """Возвращает готовый парсер CLI."""
@@ -291,6 +386,45 @@ def build_parser() -> argparse.ArgumentParser:
         help="куда сохранить .mp4 (по умолчанию: recordings/rollout_<timestamp>.mp4)",
     )
     record.set_defaults(handler=cmd_record)
+
+    firmware = subparsers.add_parser(
+        "firmware", help="собрать прошивку Arduino из папки с чекпоинтом"
+    )
+    firmware.add_argument(
+        "--model-dir",
+        type=Path,
+        required=True,
+        help="полный путь к папке с одним чекпоинтом "
+        "(<name>_model.zip или <name>.zip)",
+    )
+    firmware.add_argument(
+        "--sketch",
+        type=Path,
+        default=DEFAULT_SKETCH,
+        help=f"каталог скетча PlatformIO (по умолчанию: {DEFAULT_SKETCH})",
+    )
+    firmware.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="куда скопировать firmware.hex "
+        f"(по умолчанию: {FIRMWARE_ROOT}/<имя чекпоинта>)",
+    )
+    firmware.add_argument(
+        "--max-force",
+        type=float,
+        dest="max_force",
+        default=default().controller.max_force,
+        help="максимальная сила, Н (масштаб выхода НС; по умолчанию из пресета)",
+    )
+    firmware.add_argument(
+        "--hidden-dim",
+        type=int,
+        dest="hidden_dim",
+        default=32,
+        help="размер скрытого слоя НС (по умолчанию: 32)",
+    )
+    firmware.set_defaults(handler=cmd_firmware)
 
     return parser
 
