@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import time
@@ -206,6 +207,125 @@ class PendulumViewer:
             print("Ошибка ffmpeg при создании видео")
             print(stderr.decode(errors="replace")[-1000:])
 
+    # ── Автоматическая запись прогона (headless) ──────────────────────────────
+    def record_rollout(
+        self,
+        duration: float,
+        output_path: Path,
+        max_steps: int | None = None,
+        fps: int | None = None,
+    ) -> Path:
+        """Записывает один прогон модели в MP4 без интерактивного окна.
+
+        Args:
+            duration: Длина прогона в секундах симуляции.
+            output_path: Путь для сохранения .mp4.
+            max_steps: Опциональный лимит шагов симуляции.
+            fps: FPS видео (по умолчанию 1 / sim_dt).
+
+        Returns:
+            Путь к созданному видеофайлу.
+        """
+        # Headless mode: dummy video driver (no window shown)
+        os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
+        # Re-init pygame with dummy driver if not already initialized
+        if not pygame.get_init():
+            pygame.init()
+            self._screen = pygame.display.set_mode((C.WIDTH, C.HEIGHT))
+            self._clock = pygame.time.Clock()
+            self._font = pygame.font.SysFont("monospace", 16)
+            self._small_font = pygame.font.SysFont("monospace", 13)
+
+        ffmpeg = shutil.which("ffmpeg")
+        if ffmpeg is None:
+            raise RuntimeError("ffmpeg не найден в PATH — запись невозможна")
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        record_fps = fps or max(1, round(1.0 / self._sim_dt))
+
+        command = [
+            ffmpeg,
+            "-y",
+            "-f",
+            "rawvideo",
+            "-vcodec",
+            "rawvideo",
+            "-pix_fmt",
+            "rgb24",
+            "-s",
+            f"{C.WIDTH}x{C.HEIGHT}",
+            "-r",
+            str(record_fps),
+            "-i",
+            "-",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-pix_fmt",
+            "yuv420p",
+            str(output_path),
+        ]
+        proc = subprocess.Popen(
+            command,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+
+        try:
+            # Reset environment
+            self._obs, _ = self._env.reset()
+            self._sim_time = 0.0
+            self._sine1_hist.clear()
+            self._sine2_hist.clear()
+            self._err_hist.clear()
+
+            steps = 0
+            max_sim_steps = max_steps or int(duration / self._sim_dt) + 1
+
+            while steps < max_sim_steps and self._sim_time < duration:
+                # Step simulation
+                if self._controller is not None and self._obs is not None:
+                    action = self._controller.act(self._obs)
+                else:
+                    action = np.array([0.0], dtype=np.float64)
+
+                self._last_action = float(np.asarray(action).reshape(-1)[0])
+                self._obs, self._reward, terminated, _, _ = self._env.step(action)
+                self._sim_time += self._sim_dt
+
+                # Update plot buffers
+                q = self._plant.q
+                target_x = float(self._env.target_fn(self._sim_time)[IDX_X])
+                self._sine1_hist.append(float(np.sin(q[CLEAN_IDX_T1])))
+                self._sine2_hist.append(float(np.sin(q[CLEAN_IDX_T2])))
+                self._err_hist.append(float(q[CLEAN_IDX_X] - target_x))
+
+                # Draw and capture frame
+                self._draw()
+                if proc.stdin is not None:
+                    proc.stdin.write(pygame.image.tostring(self._screen, "RGB"))
+
+                steps += 1
+
+                if terminated:
+                    break
+
+        finally:
+            if proc.stdin is not None:
+                proc.stdin.close()
+            stderr = proc.stderr.read() if proc.stderr is not None else b""
+            returncode = proc.wait()
+            if returncode != 0:
+                raise RuntimeError(
+                    f"ffmpeg ошибка: {stderr.decode(errors='replace')[-1000:]}"
+                )
+
+        print(f"Видео сохранено: {output_path}")
+        return output_path
+
     # ── Сброс ─────────────────────────────────────────────────────────────
     def _reset(self) -> None:
         """Сбрасывает среду, время и историю графиков."""
@@ -408,14 +528,13 @@ class PendulumViewer:
     def _draw_hud(self) -> None:
         """Рисует текущее состояние, награду и управляющее воздействие."""
         # Чистое состояние (углы в радианах), а не телеметрия датчика.
-        q = self._plant.q
-        dq = self._plant.dq
+        clean = self._plant.get_clean_state()
         lines = [
             f"t = {self._sim_time:6.2f} s",
-            f"x  = {q[CLEAN_IDX_X]:+7.3f} m",
-            f"th1= {q[CLEAN_IDX_T1]:+7.3f} rad",
-            f"th2= {q[CLEAN_IDX_T2]:+7.3f} rad",
-            f"dx = {dq[CLEAN_IDX_DX]:+7.3f} m/s",
+            f"x  = {clean[CLEAN_IDX_X]:+7.3f} m",
+            f"th1= {clean[CLEAN_IDX_T1]:+7.3f} rad",
+            f"th2= {clean[CLEAN_IDX_T2]:+7.3f} rad",
+            f"dx = {clean[CLEAN_IDX_DX]:+7.3f} m/s",
             f"F  = {self._last_action:+7.2f} N",
             f"reward = {self._reward:+.3f}",
         ]

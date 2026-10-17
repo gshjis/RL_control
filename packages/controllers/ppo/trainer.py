@@ -24,7 +24,11 @@ from packages.simulation.co.datatypes import ControllerConfig
 
 
 class ValidationCallback(BaseCallback):
-    """Оценивает PPO в отдельной среде и сохраняет результаты проверки."""
+    """Оценивает PPO в отдельной среде и сохраняет результаты проверки.
+
+    Валидация запускается только на эпизодах, стартующих в НИЗУ (theta=0, cos=1).
+    Эпизоды, стартующие ВВЕРХУ (theta=pi, cos=-1), пропускаются — там тривиально.
+    """
 
     def __init__(
         self,
@@ -34,6 +38,7 @@ class ValidationCallback(BaseCallback):
         max_episode_steps: int = 1000,
         checkpoint_dir: str = "checkpoints/ppo/validation",
         verbose: int = 1,
+        upright_cos_threshold: float = -0.5,  # cos(theta) < -0.5 => upright
     ) -> None:
         """Принимает среду и параметры оценки, сохраняет их для callback."""
         super().__init__(verbose)
@@ -43,6 +48,7 @@ class ValidationCallback(BaseCallback):
         self.max_episode_steps = int(max_episode_steps)
         self.checkpoint_dir = checkpoint_dir
         self._last_eval_timestep = 0
+        self._upright_cos_threshold = upright_cos_threshold
 
     def _on_step(self) -> bool:
         """Проверяет частоту оценки и возвращает признак продолжения обучения."""
@@ -61,23 +67,105 @@ class ValidationCallback(BaseCallback):
             sync_envs_normalization(train_vec_norm, self.eval_env)
 
         episode_rewards: list[float] = []
+        final_cos_theta1_list: list[float] = []
+        upright_fractions: list[float] = []
         for _ in range(self.n_eval_episodes):
-            obs = self.eval_env.reset()
+            obs_any = self.eval_env.reset()
+            # VecNormalize.reset() returns np.ndarray for vectorized envs
+            obs_arr = obs_any[0] if isinstance(obs_any, tuple) else obs_any
+            # Ensure it's an ndarray (VecNormalize with VecEnv returns np.ndarray)
+            assert isinstance(obs_arr, np.ndarray), (
+                f"Expected ndarray, got {type(obs_arr)}"
+            )
+            # Денормализуем наблюдение, чтобы получить RAW признаки
+            # (VecNormalize хранит running mean/std и может вернуть исходные значения)
+            vec_norm = cast(VecNormalize, self.eval_env)
+            obs_raw = vec_norm.unnormalize_obs(obs_arr)
+            # unnormalize_obs может вернуть dict для Dict observation spaces,
+            # но у нас Box space -> всегда np.ndarray
+            assert isinstance(obs_raw, np.ndarray), (
+                f"Expected ndarray, got {type(obs_raw)}"
+            )
+            obs_raw = cast(np.ndarray, obs_raw)
+            # Проверяем стартовое положение: cos(theta1) в RAW наблюдении
+            # В features (4/5/7/8) cos_theta1 на индексе 1
+            cos_theta1 = (
+                float(obs_raw[0, 1]) if obs_raw.ndim == 2 else float(obs_raw[1])
+            )
+
+            # Пропускаем эпизоды, стартующие ВВЕРХУ (cos ≈ -1)
+            if cos_theta1 < self._upright_cos_threshold:
+                if self.verbose:
+                    print(
+                        f"  [Validation] Skip upright start: "
+                        f"cos(theta1)={cos_theta1:.3f}"
+                    )
+                continue
+
             done = False
             ep_reward = 0.0
             steps = 0
+            upright_steps = 0
+            final_cos_theta1 = cos_theta1  # track final cos(theta1)
             while not done and steps < self.max_episode_steps:
                 actions, _ = self.model.predict(
-                    cast(np.ndarray, obs), deterministic=True
+                    cast(np.ndarray, obs_arr), deterministic=True
                 )
-                obs, rewards, dones, _ = self.eval_env.step(actions)
+                step_result = self.eval_env.step(actions)
+                obs_next = step_result[0]
+                rewards = step_result[1]
+                dones = step_result[2]
+                infos = step_result[3]
+                obs_arr = obs_next[0] if isinstance(obs_next, tuple) else obs_next
+                assert isinstance(obs_arr, np.ndarray), (
+                    f"Expected ndarray, got {type(obs_arr)}"
+                )
+                done = bool(dones[0])
+                # VecEnv автосбрасывает среду на терминальном шаге: obs_next —
+                # это уже стартовое наблюдение следующего эпизода (theta1=0,
+                # cos=1), а реальное последнее состояние лежит в info.
+                terminal_obs = infos[0].get("terminal_observation") if done else None
+                measured_obs = (
+                    np.asarray(terminal_obs, dtype=np.float64).reshape(1, -1)
+                    if terminal_obs is not None
+                    else obs_arr
+                )
+                # Get raw observation for cos(theta1) tracking
+                obs_raw = vec_norm.unnormalize_obs(measured_obs)
+                assert isinstance(obs_raw, np.ndarray)
+                final_cos_theta1 = (
+                    float(obs_raw[0, 1]) if obs_raw.ndim == 2 else float(obs_raw[1])
+                )
+                if final_cos_theta1 < self._upright_cos_threshold:
+                    upright_steps += 1
                 ep_reward += float(rewards[0])
                 steps += 1
-                done = bool(dones[0])
+            upright_fraction = upright_steps / steps if steps else 0.0
             episode_rewards.append(ep_reward)
+            final_cos_theta1_list.append(final_cos_theta1)
+            upright_fractions.append(upright_fraction)
+            if self.verbose:
+                print(
+                    f"  [Validation] Episode done: reward={ep_reward:.3f}, "
+                    f"steps={steps}, final_cos(theta1)={final_cos_theta1:.3f}, "
+                    f"upright_fraction={upright_fraction:.3f}"
+                )
+
+        if not episode_rewards:
+            if self.verbose:
+                print("  [Validation] All episodes skipped (upright starts)")
+            return
 
         mean_reward = float(np.mean(episode_rewards))
+        mean_final_cos = (
+            float(np.mean(final_cos_theta1_list)) if final_cos_theta1_list else 0.0
+        )
+        mean_upright_fraction = (
+            float(np.mean(upright_fractions)) if upright_fractions else 0.0
+        )
         self.logger.record("eval/mean_reward", mean_reward)
+        self.logger.record("eval/mean_final_cos_theta1", mean_final_cos)
+        self.logger.record("eval/upright_fraction", mean_upright_fraction)
         self.logger.dump(self.num_timesteps)
 
         # Сохраняем отдельный snapshot после каждой валидации. Помимо весов
@@ -95,7 +183,10 @@ class ValidationCallback(BaseCallback):
         if self.verbose:
             print(
                 f"[Eval] timesteps={self.num_timesteps} | "
-                f"mean_reward={mean_reward:.4f} | saved={checkpoint_path}.zip"
+                f"mean_reward={mean_reward:.4f} | "
+                f"mean_final_cos(theta1)={mean_final_cos:.3f} | "
+                f"upright_fraction={mean_upright_fraction:.3f} | "
+                f"saved={checkpoint_path}.zip"
             )
 
 
@@ -134,7 +225,7 @@ class PPOTrainer:
                 [partial(self._env_factory, rank) for rank in range(self._n_envs)]
             ),
             norm_obs=True,
-            norm_reward=False,
+            norm_reward=True,
         )
         model = SB3_PPO(
             self._ppo_config.policy,
@@ -163,6 +254,10 @@ class PPOTrainer:
             # reward function instead of VecNormalize's running statistics.
             norm_reward=False,
         )
+        # Валидация не должна обновлять running-статистику: иначе за 2 эпизода
+        # по 10000 шагов eval-нормализация уезжает от тренировочной, и модель
+        # видит на оценке не те входы, к которым привыкла.
+        eval_vec_env.training = False
         eval_callback = ValidationCallback(
             eval_env=eval_vec_env,
             eval_freq=self._ppo_config.eval_freq,
@@ -170,6 +265,7 @@ class PPOTrainer:
             max_episode_steps=self._ppo_config.max_episode_steps,
             checkpoint_dir=self._checkpoint_dir,
             verbose=verbose,
+            upright_cos_threshold=-0.5,
         )
 
         model.learn(

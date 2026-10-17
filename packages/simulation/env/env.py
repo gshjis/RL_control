@@ -10,7 +10,7 @@ from numpy.typing import NDArray
 
 from packages.controllers.base.cost_functions import RewardFn
 from packages.simulation.co.datatypes import ControllerConfig, PlantConfig, SensorConfig
-from packages.simulation.co.layout import OBS_DIM
+from packages.simulation.co.features import build_features_auto, get_obs_dim
 from packages.simulation.co.pendulum import ObjectOfControl
 
 
@@ -38,6 +38,7 @@ class PendulumEnv(gym.Env):
         self._target: Callable[[float], np.ndarray] = target
         self._plant_config: PlantConfig = plant_config
         self._sensor_config: SensorConfig = sensor_config
+        self._controller_config: ControllerConfig = controller_config
         # Первый reset() сеет из этого значения: параллельные среды получают
         # разные seed+rank, эпизоды после первого продолжают поток rng.
         self._initial_seed = seed
@@ -58,8 +59,10 @@ class PendulumEnv(gym.Env):
             raise ValueError("max_episode_steps must be positive")
         self._episode_steps = 0
 
+        # Наблюдение — это автоматический вектор признаков (4/5/7/8 компонент)
+        obs_dim = get_obs_dim(plant_config, controller_config)
         self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(OBS_DIM,), dtype=np.float64
+            low=-np.inf, high=np.inf, shape=(obs_dim,), dtype=np.float64
         )
         self.action_space = spaces.Box(
             low=-controller_config.max_force,
@@ -91,10 +94,17 @@ class PendulumEnv(gym.Env):
     def _make_observation(
         self,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """Возвращает (наблюдение = телеметрия ‖ цель, телеметрия, цель)."""
+        """Возвращает (наблюдение = признаки для НС, телеметрия, цель).
+
+        Наблюдение — автоматический вектор признаков (4/5/7/8 компонент)
+        через build_features_auto. Телеметрия и цель передаются в reward/
+        terminate/truncate без изменений.
+        """
         telemetry = self._plant.get_telemetry()
         target_t = self._target(self._t)
-        observation = np.concatenate([telemetry, target_t])
+        observation = build_features_auto(
+            self._plant_config, self._controller_config, telemetry, target_t
+        )
         return observation, telemetry, target_t
 
     def reset(

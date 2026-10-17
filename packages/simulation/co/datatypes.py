@@ -189,6 +189,10 @@ class ControllerConfig:
     dt: float = 0.005
     max_force: float = 30.0
     has_velocity_sensors: bool = False
+    # True — добавлять ошибку позиции тележки (x - x_target) в наблюдение.
+    # Нужно для задач позиционирования тележки; при False наблюдение
+    # инвариантно к абсолютному положению (переносимость на железо).
+    position_controlled: bool = False
     differentiator_cutoff_hz: float | None = None
     filter_cutoff_hz: float = 50.0
 
@@ -198,6 +202,7 @@ class ControllerConfig:
             "dt": self.dt,
             "max_force": self.max_force,
             "has_velocity_sensors": self.has_velocity_sensors,
+            "position_controlled": self.position_controlled,
             "differentiator_cutoff_hz": self.differentiator_cutoff_hz,
             "filter_cutoff_hz": self.filter_cutoff_hz,
         }

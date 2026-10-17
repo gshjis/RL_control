@@ -25,7 +25,7 @@ def test_default_preset_to_dict_is_json_serializable() -> None:
 
     json.dumps(payload)  # не должен бросать
 
-    assert payload["name"] == "ppo_upright"
+    assert payload["name"] == "ppo_single_no_pos"
     assert payload["reward"] == "energy"
     assert payload["terminate"] == "cart_limit"
     assert payload["truncate"] == "steps"
