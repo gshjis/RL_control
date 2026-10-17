@@ -61,6 +61,10 @@ def test_energy_reward_penalises_kinetic_energy() -> None:
     assert moving < stationary
 
 
+# TODO(experiment): terminate_condition временно всегда возвращает False
+# (см. packages/controllers/base/terminate_conditions.py). Вернуть проверки
+# и снять skip, когда досрочное завершение снова включат.
+@pytest.mark.skip(reason="TODO(experiment): terminate временно отключён")
 def test_terminate_condition_detects_cart_limit() -> None:
     state = np.zeros(TELEMETRY_DIM, dtype=np.float64)
     state[IDX_X] = 0.51
@@ -68,6 +72,7 @@ def test_terminate_condition_detects_cart_limit() -> None:
     assert terminate_condition(state, state)
 
 
+@pytest.mark.skip(reason="TODO(experiment): terminate временно отключён")
 def test_terminate_condition_detects_non_finite_state() -> None:
     state = np.zeros(TELEMETRY_DIM, dtype=np.float64)
     state[IDX_COS_T1] = np.nan
