@@ -1,4 +1,5 @@
 #include "sensor_block.h"
+#include "as5600.h"
 #include "config.h"
 #include <math.h>
 

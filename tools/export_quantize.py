@@ -1,6 +1,15 @@
 #!/usr/bin/env python3
-"""
-Export + INT8 Quantization для PPO политики → Arduino model_weights.h
+"""Экспорт PPO-политики в INT8 C-заголовок для Arduino.
+
+Архитектура берётся из самой модели: поддерживается любое число скрытых
+слоёв и любой их размер. Формат вычислений описан в
+``arduino/pendulum_control/model_schema.h``:
+
+* веса — int8, симметричное квантование per-tensor (scale = max|w| / 127);
+* смещения — float32 в PROGMEM: их мало, точность важнее экономии;
+* активации (и вход) — int16 Q7.8, значение = int / 256;
+* tanh — по таблице ``g_tanh_lut`` (257 точек на [-8, 8]);
+* вход нормализуется статистикой VecNormalize, на которой обучалась модель.
 
 Usage:
     python tools/export_quantize.py \
@@ -21,369 +30,327 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from packages.controllers.ppo.ppo import PPOController
 
+Q_SHIFT = 8
+Q_SCALE = float(1 << Q_SHIFT)
+Q_MIN = -32768
+Q_MAX = 32767
 
-def quantize_asymmetric(
-    tensor: np.ndarray, bits: int = 8
-) -> tuple[np.ndarray, float, int]:
-    """
-    Asymmetric quantization: float -> int8
+ACT_LINEAR = 0
+ACT_TANH = 1
 
-    Returns:
-        quantized: int8 tensor
-        scale: float scale factor
-        zero_point: int zero point
-    """
-    qmin = -128 if bits == 8 else -(1 << (bits - 1))
-    qmax = 127 if bits == 8 else (1 << (bits - 1)) - 1
+TANH_X_MAX = 8.0
+TANH_LUT_STEP = 1.0 / 16.0
+TANH_LUT_SIZE = 257
 
-    min_val = float(tensor.min())
-    max_val = float(tensor.max())
 
-    if max_val == min_val:
-        scale = 1.0
-        zero_point = 0
-    else:
-        scale = (max_val - min_val) / (qmax - qmin)
-        zero_point = int(round(qmin - min_val / scale))
-        zero_point = max(qmin, min(qmax, zero_point))
+# ── Квантование ───────────────────────────────────────────────────────────
+def build_tanh_lut() -> np.ndarray:
+    """Возвращает таблицу tanh в Q7.8: 257 точек на [-8, 8] с шагом 1/16."""
+    xs = np.linspace(-TANH_X_MAX, TANH_X_MAX, TANH_LUT_SIZE)
+    return np.round(np.tanh(xs) * Q_SCALE).astype(np.int16)
 
-    quantized = np.clip(np.round(tensor / scale + zero_point), qmin, qmax).astype(
-        np.int8
+
+def tanh_q78(x_q78: np.ndarray, lut: np.ndarray) -> np.ndarray:
+    """Повторяет поиск из прошивки: idx = (x_q78 >> 4) + 128, клип [0, 256]."""
+    idx = np.clip((x_q78.astype(np.int32) >> 4) + 128, 0, TANH_LUT_SIZE - 1)
+    return lut[idx]
+
+
+def quantize_symmetric(tensor: np.ndarray) -> tuple[np.ndarray, float]:
+    """Симметричное INT8-квантование per-tensor (zero point = 0)."""
+    amax = float(np.max(np.abs(tensor))) if tensor.size else 0.0
+    scale = amax / 127.0 if amax > 0.0 else 1.0
+    quantized = np.clip(np.round(tensor / scale), -127, 127).astype(np.int8)
+    return quantized, scale
+
+
+def float_to_q78(values: np.ndarray) -> np.ndarray:
+    """Переводит float в int16 Q7.8 с насыщением (как в прошивке)."""
+    scaled = np.round(np.asarray(values, dtype=np.float64) * Q_SCALE)
+    return np.clip(scaled, Q_MIN, Q_MAX).astype(np.int16)
+
+
+# ── Извлечение слоёв ──────────────────────────────────────────────────────
+def extract_layers(policy) -> list[tuple[np.ndarray, np.ndarray, int]]:
+    """Возвращает слои политики: [(weights[out, in], bias[out], activation)]."""
+    state = policy.state_dict()
+    layers: list[tuple[np.ndarray, np.ndarray, int]] = []
+
+    index = 0
+    while f"mlp_extractor.policy_net.{index}.weight" in state:
+        weight = state[f"mlp_extractor.policy_net.{index}.weight"]
+        bias = state[f"mlp_extractor.policy_net.{index}.bias"]
+        layers.append(
+            (
+                weight.detach().cpu().numpy(),
+                bias.detach().cpu().numpy(),
+                ACT_TANH,
+            )
+        )
+        index += 2
+
+    if "action_net.weight" not in state:
+        raise ValueError("В state_dict нет action_net: политика не MLP?")
+
+    layers.append(
+        (
+            state["action_net.weight"].detach().cpu().numpy(),
+            state["action_net.bias"].detach().cpu().numpy(),
+            ACT_LINEAR,
+        )
     )
-    return quantized, scale, zero_point
+    return layers
 
 
-def dequantize_asymmetric(
-    quantized: np.ndarray, scale: float, zero_point: int
+def normalization_stats(
+    controller: PPOController, input_dim: int
+) -> tuple[np.ndarray, np.ndarray, float, float]:
+    """Возвращает (mean, var, eps, clip) статистики VecNormalize."""
+    vec = controller.vec_normalize
+    obs_rms = getattr(vec, "obs_rms", None) if vec is not None else None
+    if vec is None or not hasattr(obs_rms, "mean"):
+        print("WARNING: VecNormalize не найден — вход не будет нормализован")
+        return (
+            np.zeros(input_dim, dtype=np.float64),
+            np.ones(input_dim, dtype=np.float64),
+            1e-8,
+            10.0,
+        )
+
+    mean = np.asarray(obs_rms.mean, dtype=np.float64).reshape(-1)
+    var = np.asarray(obs_rms.var, dtype=np.float64).reshape(-1)
+    if mean.size != input_dim:
+        raise ValueError(
+            f"Статистика нормализации имеет {mean.size} компонент, "
+            f"а модель ждёт {input_dim}"
+        )
+    return mean, var, float(vec.epsilon), float(vec.clip_obs)
+
+
+# ── Эмуляция forward ──────────────────────────────────────────────────────
+def forward_float(
+    raw: np.ndarray,
+    layers: list[tuple[np.ndarray, np.ndarray, int]],
+    mean: np.ndarray,
+    var: np.ndarray,
+    eps: float,
+    clip: float,
 ) -> np.ndarray:
-    """Inverse: int8 -> float"""
-    return (quantized.astype(np.float32) - zero_point) * scale
+    """Эталон: обычный forward во float с нормализованным входом."""
+    x = np.clip((raw - mean) / np.sqrt(var + eps), -clip, clip)
+    for weight, bias, activation in layers:
+        x = x @ weight.T + bias
+        if activation == ACT_TANH:
+            x = np.tanh(x)
+    return x[:, 0]
 
 
-def export_model(
-    model_path: str,
-    output_path: str,
-    max_force: float = 24.0,
-    hidden_dim: int = 32,
-) -> None:
-    """Экспорт PPO модели в Arduino C header"""
+def forward_quantized(
+    raw: np.ndarray,
+    layers: list[tuple[np.ndarray, np.ndarray, int]],
+    lut: np.ndarray,
+    mean: np.ndarray,
+    var: np.ndarray,
+    eps: float,
+    clip: float,
+) -> np.ndarray:
+    """Эталон прошивки: нормализация + Q7.8 + int32 MAC + табличный tanh."""
+    normalized = np.clip((raw - mean) / np.sqrt(var + eps), -clip, clip)
+    activations = float_to_q78(normalized)
 
-    print(f"Loading model from {model_path}...")
+    for weight, bias, activation in layers:
+        weight_q, scale = quantize_symmetric(weight)
+        acc = activations.astype(np.int32) @ weight_q.astype(np.int32).T
+        pre = acc * scale / Q_SCALE + bias.astype(np.float64)
+        if activation == ACT_TANH:
+            activations = tanh_q78(float_to_q78(pre), lut)
+        else:
+            return pre[:, 0]
+    return activations[:, 0] / Q_SCALE
 
-    # Загружаем контроллер
-    controller = PPOController.load(model_path)
 
-    # Получаем веса политики (SB3 PPO policy)
-    policy = controller._policy
+# ── Генерация заголовка ───────────────────────────────────────────────────
+def _c_float(value: float) -> str:
+    """Форматирует float как валидный C++-литерал (0f и 1f невалидны)."""
+    text = f"{float(value):.8g}"
+    if "." not in text and "e" not in text and "E" not in text:
+        text += ".0"
+    return text + "f"
 
-    # Извлекаем веса MLP
-    # SB3 MlpPolicy: features_extractor -> mlp_extractor -> action_net/value_net
-    # Для PPO: policy.mlp_extractor.policy_net (Sequential)
 
-    state_dict = policy.state_dict()
+def _array_to_c(
+    values: np.ndarray, c_type: str, name: str, per_line: int = 12
+) -> str:
+    """Форматирует одномерный массив как C-инициализатор в PROGMEM."""
+    rendered = []
+    for value in values.reshape(-1):
+        if c_type == "float":
+            rendered.append(_c_float(value))
+        else:
+            rendered.append(str(int(value)))
 
-    # Ищем веса политики
-    # Обычно: 'mlp_extractor.policy_net.0.weight',
-    # 'mlp_extractor.policy_net.0.bias', ...
-    # 'action_net.weight', 'action_net.bias'
-
-    print("State dict keys:")
-    for k, v in state_dict.items():
-        print(f"  {k}: {tuple(v.shape)}")
-
-    # Предполагаем архитектуру: 4 -> 32 -> 32 -> 1 (или 4 -> 32 -> 1)
-    # Ищем Linear слои
-
-    # Пробуем разные варианты имен
-    w1: np.ndarray
-    b1: np.ndarray
-    w2: np.ndarray | None = None
-    b2: np.ndarray | None = None
-
-    # Вариант 1: mlp_extractor.policy_net
-    if "mlp_extractor.policy_net.0.weight" in state_dict:
-        w1 = (
-            state_dict["mlp_extractor.policy_net.0.weight"].cpu().numpy().T
-        )  # [out, in] -> [in, out]
-        b1 = state_dict["mlp_extractor.policy_net.0.bias"].cpu().numpy()
-        w2 = state_dict["mlp_extractor.policy_net.2.weight"].cpu().numpy().T
-        b2 = state_dict["mlp_extractor.policy_net.2.bias"].cpu().numpy()
-    # Вариант 2: action_net напрямую
-    elif "action_net.weight" in state_dict:
-        w1 = state_dict["action_net.weight"].cpu().numpy().T
-        b1 = state_dict["action_net.bias"].cpu().numpy()
-        # Если только один слой
-        w2 = None
-        b2 = None
-    else:
-        raise ValueError("Cannot find policy weights in state_dict")
-
-    print(f"Layer 1: {w1.shape} -> {b1.shape}")
-    if w2 is not None:
-        assert w2 is not None
-        assert b2 is not None
-        print(f"Layer 2: {w2.shape} -> {b2.shape}")
-
-    # Если 3 слоя (4->32->32->1), объединяем или берём последний
-    # Для простоты: если w2 есть и это [32, 1], а w1 [4, 32] — ок
-    # Если w2 [32, 32] — нужен третий слой
-
-    # Квантование
-    print("\nQuantizing...")
-
-    # Layer 1
-    w1_q, w1_scale, w1_zp = quantize_asymmetric(w1)
-    b1_q, b1_scale, b1_zp = quantize_asymmetric(b1)
-
-    # Layer 2
-    w2_q: np.ndarray
-    b2_q: np.ndarray
-    w2_scale: float
-    b2_scale: float
-    w2_zp: int
-    b2_zp: int
-
-    if w2 is not None:
-        assert w2 is not None
-        assert b2 is not None
-        w2_q, w2_scale, w2_zp = quantize_asymmetric(w2)
-        b2_q, b2_scale, b2_zp = quantize_asymmetric(b2)
-    else:
-        # Single layer: выход напрямую
-        w2_q = np.array([[1]], dtype=np.int8)  # identity
-        b2_q = np.array([0], dtype=np.int8)
-        w2_scale = 1.0
-        b2_scale = 1.0
-        w2_zp = 0
-        b2_zp = 0
-
-    # Input scale: вход в Q7.8 (features_q >> 3), масштаб = 1/256 * 32 = 1/8
-    # Но проще: пусть вход уже в float, а квантование делается в forward
-    input_scale = 1.0
-    input_zp = 0
-    hidden_zp = 0
-
-    # Output scale: действия в [-max_force, max_force]
-    output_scale = max_force
-    output_zp = 0
-
-    # Генерация C header
-    print(f"\nGenerating {output_path}...")
-
-    header = generate_header(
-        w1_q,
-        b1_q,
-        w1_scale,
-        b1_scale,
-        w2_q,
-        b2_q,
-        w2_scale,
-        b2_scale,
-        input_scale,
-        input_zp,
-        hidden_zp,
-        output_scale,
-        output_zp,
-        hidden_dim,
-    )
-
-    Path(output_path).write_text(header)
-    print("Done!")
-
-    # Валидация: сравниваем inference
-    validate_quantization(
-        w1,
-        b1,
-        w2,
-        b2,
-        w1_q,
-        b1_q,
-        w1_scale,
-        b1_scale,
-        w1_zp,
-        b1_zp,
-        w2_q,
-        b2_q,
-        w2_scale,
-        b2_scale,
-        w2_zp,
-        b2_zp,
-        input_scale,
-        output_scale,
-    )
+    lines = [f"const {c_type} {name}[{len(rendered)}] PROGMEM = {{"]
+    for start in range(0, len(rendered), per_line):
+        chunk = ", ".join(rendered[start : start + per_line])
+        lines.append(f"  {chunk},")
+    lines.append("};")
+    return "\n".join(lines)
 
 
 def generate_header(
-    w1_q,
-    b1_q,
-    w1_scale,
-    b1_scale,
-    w2_q,
-    b2_q,
-    w2_scale,
-    b2_scale,
-    input_scale,
-    input_zp,
-    hidden_zp,
-    output_scale,
-    output_zp,
-    hidden_dim,
+    layers: list[tuple[np.ndarray, np.ndarray, int]],
+    lut: np.ndarray,
+    mean: np.ndarray,
+    var: np.ndarray,
+    eps: float,
+    clip: float,
+    source: str,
 ) -> str:
-    """Генерация model_weights.h"""
+    """Собирает model_weights.h для произвольной MLP-архитектуры."""
+    input_dim = int(layers[0][0].shape[1])
+    dims = [input_dim] + [int(weight.shape[0]) for weight, _, _ in layers]
+    max_dim = max(dims)
 
-    def array_to_c(arr, name, cols=8):
-        lines = [f"const int8_t {name}[{arr.size}] PROGMEM = {{"]
-        for i in range(0, len(arr), cols):
-            chunk = arr[i : i + cols]
-            lines.append("  " + ", ".join(str(int(x)) for x in chunk) + ",")
-        lines.append("};")
-        return "\n".join(lines)
+    blocks: list[str] = []
+    entries: list[str] = []
+    for index, (weight, bias, activation) in enumerate(layers):
+        weight_q, scale = quantize_symmetric(weight)
+        in_dim, out_dim = int(weight.shape[1]), int(weight.shape[0])
+        blocks.append(
+            f"// --- Слой {index + 1}: {in_dim} -> {out_dim} ---\n"
+            + _array_to_c(weight_q, "int8_t", f"g_w{index}")
+            + "\n\n"
+            + _array_to_c(bias, "float", f"g_b{index}")
+        )
+        act_name = "NN_ACT_TANH" if activation == ACT_TANH else "NN_ACT_LINEAR"
+        entries.append(
+            f"  {{ g_w{index}, g_b{index}, {_c_float(scale)}, {in_dim}, "
+            f"{out_dim}, {act_name} }},"
+        )
 
-    w1_flat = w1_q.flatten()
-    w2_flat = w2_q.flatten()
+    architecture = " -> ".join(str(dim) for dim in dims)
+    body = "\n\n".join(blocks)
+    entries_text = "\n".join(entries)
 
-    header = f"""#ifndef MODEL_WEIGHTS_H
+    return f"""#ifndef MODEL_WEIGHTS_H
 #define MODEL_WEIGHTS_H
 
 #include <avr/pgmspace.h>
+
 #include "config.h"
+#include "model_schema.h"
 
 // ============================================================================
-// КВАНТОВАННЫЕ ВЕСА НС (INT8 asymmetric)
-// Автогенерировано: python tools/export_quantize.py
-// Архитектура: Input(4) -> Hidden({hidden_dim}, Tanh) -> Output(1)
+// КВАНТОВАННЫЕ ВЕСА НС (INT8, симметричное квантование)
+// Автогенерировано из: {source}
+// Архитектура: {architecture}
 // ============================================================================
 
-// --- Layer 1: 4 -> {hidden_dim} ---
-{array_to_c(w1_flat, "g_w1")}
+#define NN_NUM_LAYERS {len(layers)}
+#define NN_INPUT_DIM {input_dim}
+#define NN_MAX_DIM {max_dim}
 
-// Biases: [{hidden_dim}]
-{array_to_c(b1_q, "g_b1")}
+#define NN_OBS_EPS {_c_float(eps)}
+#define NN_OBS_CLIP {_c_float(clip)}
 
-// --- Layer 2: {hidden_dim} -> 1 ---
-{array_to_c(w2_flat, "g_w2")}
+{body}
 
-// Biases: [1]
-{array_to_c(b2_q, "g_b2")}
+// --- Таблица tanh (Q7.8), 257 точек на [-8, 8] ---
+{_array_to_c(lut, "int16_t", "g_tanh_lut", 16)}
 
-// --- Quantization parameters ---
-struct QuantizedModel g_quantized_model = {{
-  // Layer 1
-  .w1 = g_w1,
-  .b1 = g_b1,
-  .w1_scale = {w1_scale:.6f}f,
-  .b1_scale = {b1_scale:.6f}f,
-  .input_scale = {input_scale:.6f}f,
-  .input_zp = {input_zp},
-  .hidden_zp = {hidden_zp},
+// --- Нормализация входа (статистика VecNormalize) ---
+{_array_to_c(mean, "float", "g_obs_mean", 8)}
 
-  // Layer 2
-  .w2 = g_w2,
-  .b2 = g_b2,
-  .w2_scale = {w2_scale:.6f}f,
-  .b2_scale = {b2_scale:.6f}f,
-  .output_scale = {output_scale:.6f}f,
-  .output_zp = {output_zp},
+{_array_to_c(var, "float", "g_obs_var", 8)}
+
+// --- Описание слоёв ---
+const QuantizedLayer g_layers[NN_NUM_LAYERS] PROGMEM = {{
+{entries_text}
+}};
+
+const QuantizedModel g_quantized_model = {{
+  NN_NUM_LAYERS,
+  NN_INPUT_DIM,
+  g_layers,
+  g_obs_mean,
+  g_obs_var,
+  NN_OBS_EPS,
+  NN_OBS_CLIP,
 }};
 
 #endif // MODEL_WEIGHTS_H
 """
-    return header
 
 
-def validate_quantization(
-    w1,
-    b1,
-    w2,
-    b2,
-    w1_q,
-    b1_q,
-    w1_scale,
-    b1_scale,
-    w1_zp,
-    b1_zp,
-    w2_q,
-    b2_q,
-    w2_scale,
-    b2_scale,
-    w2_zp,
-    b2_zp,
-    input_scale,
-    output_scale,
-):
-    """Проверка: квантованная модель ≈ оригинал"""
+# ── Основной сценарий ─────────────────────────────────────────────────────
+def export_model(model_path: str, output_path: str) -> None:
+    """Квантует политику из чекпоинта и пишет C-заголовок."""
+    print(f"Loading model from {model_path}...")
+    controller = PPOController.load(model_path)
+    if controller.model is None:
+        raise RuntimeError(f"Модель не загружена: {model_path}")
+
+    layers = extract_layers(controller.model.policy)
+    input_dim = int(layers[0][0].shape[1])
+    mean, var, eps, clip = normalization_stats(controller, input_dim)
+    lut = build_tanh_lut()
+
+    print("Architecture:")
+    previous = input_dim
+    for weight, _, activation in layers:
+        out_dim = int(weight.shape[0])
+        name = "tanh" if activation == ACT_TANH else "linear"
+        print(f"  {previous} -> {out_dim} ({name})")
+        previous = out_dim
+
+    for weight, _, _ in layers:
+        amax = float(np.max(np.abs(weight)))
+        acc_max = 127.0 * Q_MAX * int(weight.shape[1])
+        print(f"  weights max |w| = {amax:.6f}, worst-case |acc| = {acc_max:.3e}")
+        if acc_max >= 2**31:
+            raise ValueError("Насыщение int32 в аккумуляторе: слишком широкий слой")
+
     print("\nValidating quantization...")
+    rng = np.random.default_rng(0)
+    raw = rng.uniform(-3.0, 3.0, (200, input_dim))
+    reference = forward_float(raw, layers, mean, var, eps, clip)
+    quantized = forward_quantized(raw, layers, lut, mean, var, eps, clip)
 
-    # Тестовые входы
-    np.random.seed(42)
-    test_inputs = np.random.uniform(-1, 1, (100, 4)).astype(np.float32)
-
-    # Оригинальный forward (float)
-    def forward_float(x):
-        h = np.tanh(x @ w1 + b1)
-        y = h @ w2 + b2 if w2 is not None else h
-        return y * output_scale
-
-    # Квантованный forward (эмуляция Arduino)
-    def forward_quant(x):
-        # Квантуем вход
-        x_q = np.clip(np.round(x * input_scale + 0), -128, 127).astype(np.int8)
-
-        # L1
-        h_acc = (
-            x_q.astype(np.int16) @ w1_q.astype(np.int16).T + b1_q.astype(np.int16) * 256
-        )
-        h_q = np.tanh(h_acc / 256.0)  # Упрощённо
-        h_q = np.clip(np.round(h_q * 256), -128, 127).astype(np.int8)
-
-        # L2
-        if w2 is not None:
-            y_acc = (
-                h_q.astype(np.int16) @ w2_q.astype(np.int16).T
-                + b2_q.astype(np.int16) * 256
-            )
-        else:
-            y_acc = h_q.astype(np.int16).sum(axis=1)  # Упрощение
-
-        y = y_acc * w2_scale * (1 / 256.0) * output_scale
-        return y
-
-    y_float = forward_float(test_inputs)
-    y_quant = forward_quant(test_inputs)
-
-    mse = np.mean((y_float - y_quant) ** 2)
-    max_err = np.max(np.abs(y_float - y_quant))
-
+    mse = float(np.mean((reference - quantized) ** 2))
+    max_error = float(np.max(np.abs(reference - quantized)))
     print(f"  MSE: {mse:.6f}")
-    print(f"  Max abs error: {max_err:.6f}")
+    print(f"  Max abs error: {max_error:.6f}")
     print(
-        f"  Output range: [{y_float.min():.3f}, {y_float.max():.3f}] "
-        f"vs [{y_quant.min():.3f}, {y_quant.max():.3f}]"
+        f"  Output range: [{reference.min():.3f}, {reference.max():.3f}] "
+        f"vs [{quantized.min():.3f}, {quantized.max():.3f}]"
     )
-
-    if max_err > 0.5:
+    if max_error > 0.5:
         print("  WARNING: Large quantization error!")
     else:
         print("  OK: Quantization error acceptable")
 
+    header = generate_header(
+        layers=layers,
+        lut=lut,
+        mean=mean,
+        var=var,
+        eps=eps,
+        clip=clip,
+        source=model_path,
+    )
+    Path(output_path).write_text(header, encoding="utf-8")
+    print(f"\nGenerated {output_path}")
 
-def main():
+
+def main() -> None:
     parser = argparse.ArgumentParser(description="Export PPO model to Arduino INT8")
     parser.add_argument(
         "--model", required=True, help="Path to model checkpoint (without .zip)"
     )
     parser.add_argument("--output", required=True, help="Output .h file path")
-    parser.add_argument("--max-force", type=float, default=24.0, help="Max force (N)")
-    parser.add_argument("--hidden-dim", type=int, default=32, help="Hidden layer size")
-
     args = parser.parse_args()
 
-    export_model(
-        model_path=args.model,
-        output_path=args.output,
-        max_force=args.max_force,
-        hidden_dim=args.hidden_dim,
-    )
+    export_model(model_path=args.model, output_path=args.output)
 
 
 if __name__ == "__main__":

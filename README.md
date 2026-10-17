@@ -43,6 +43,27 @@ make plot        # headless график cos(θ₁) за 20 прогона
 make eval        # метрики + график для указанного чекпоинта
 make check       # ruff + mypy + pytest (63 теста)
 ```
+
+### Прошивка Arduino
+
+```bash
+python -m packages firmware --model-dir /полный/путь/к/папке/с/моделью
+```
+
+В папке должен лежать ровно один чекпоинт — `<name>_model.zip` (итоговое
+обучение, рядом `_config.json`/`_vecnormalize.pkl`) или `<name>.zip` (снимок
+валидации). Команда:
+
+1. квантует веса в `arduino/pendulum_control/model_weights.h` — архитектура
+   (число и размер скрытых слоёв) берётся из модели, вручную её задавать не
+   нужно; статистика `VecNormalize` тоже попадает в заголовок;
+2. собирает прошивку через PlatformIO (`pio run`);
+3. копирует `firmware_<name>_<env>.hex` в `artifacts/firmware/<name>/`.
+
+Флаги: `--sketch DIR` (другой скетч), `--output-dir DIR` (куда копировать
+`.hex`). Без PlatformIO сборка завершается с понятной ошибкой
+(`pip install platformio`).
+
 ---
 
 ## Содержание (код)

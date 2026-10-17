@@ -11,9 +11,10 @@
 | **Кейс** | Single pendulum, no position control |
 | **Наблюдение** | 4 признака: `[sinθ1, cosθ1, dθ1, dx]` |
 | **Действие** | Сила в `[-max_force, +max_force]` → PWM + DIR |
-| **Частота управления** | 500 Гц (2 мс) |
-| **Квантование** | Post-training INT8 asymmetric |
-| **Архитектура НС** | MLP: `4 → 32 → 1` (Tanh) |
+| **Частота управления** | 100 Гц (10 мс) — совпадает с `controller.dt` при обучении |
+| **Квантование** | Post-training INT8, веса симметрично per-tensor |
+| **Архитектура НС** | любая MLP — задаётся моделью через `model_weights.h` |
+| **Нормализация входа** | статистика `VecNormalize` из чекпоинта |
 
 ---
 
@@ -22,7 +23,7 @@
 | Компонент | Модель | Интерфейс | Пины Arduino |
 |-----------|--------|-----------|--------------|
 | Энкодер маятника (θ1) | AS5600 | I2C | A4 (SDA), A5 (SCL) |
-| Энкодер тележки (x) | AS5600 | I2C | Тот же bus (адрес 0x36 / 0x37) |
+| Энкодер тележки (x) | AS5600 | I2C | Тот же bus, адрес 0x37 |
 | Драйвер мотора | TB6612FNG | PWM + DIR | PWM: D9 (OC1A), DIR: D2 |
 | Питание Arduino | USB | — | — |
 | Питание мотора | Отдельный блок (12-24V) | — | VM на TB6612 |
@@ -37,7 +38,8 @@
 pendulum_control/
 ├── pendulum_control.ino       # Основной скетч
 ├── config.h                   # Пины, частоты, константы
-├── model_weights.h            # INT8 веса в PROGMEM (генерируется)
+├── model_schema.h             # struct QuantizedModel/QuantizedLayer
+├── model_weights.h            # INT8 веса + LUT + нормализация (генерируется)
 ├── inference.h / inference.cpp # INT8 forward pass (Q7.8 fixed-point)
 ├── as5600.h / as5600.cpp      # I2C драйвер AS5600
 ├── sensor_block.h / sensor_block.cpp # Квантование/шум/дифф/ФНЧ
@@ -57,6 +59,9 @@ pendulum_control/
 
 # Или PlatformIO
 pio run -t upload
+
+# Или одной командой из корня проекта: веса + сборка
+python -m packages firmware --model-dir /полный/путь/к/папке/с/моделью
 ```
 
 ---
@@ -70,27 +75,32 @@ pio run -t upload
 cd /home/gshjis/Projects/RL_control
 poetry run python -m packages train --total-timesteps 3500000
 
-# 2. Экспорт + квантование
+# 2. Экспорт + квантование + сборка прошивки
+#    (в папке должен лежать ровно один чекпоинт)
+poetry run python -m packages firmware --model-dir /путь/к/папке/с/одной/моделью
+
+# Только квантование, без сборки:
 poetry run python tools/export_quantize.py \
   --model checkpoints/ppo/validation/model_3500000 \
   --output arduino/pendulum_control/model_weights.h
 ```
 
 Скрипт `export_quantize.py`:
-- Загружает PPO политику (weights + architecture)
-- Применяет INT8 asymmetric quantization per-tensor
-- Генерирует `model_weights.h` с массивами в PROGMEM
+- Загружает PPO политику (weights + architecture) и статистику `VecNormalize`
+- Берёт из модели все слои — число и размер скрытых слоёв настраивать не нужно
+- Квантует веса в INT8 (симметрично, per-tensor); bias остаётся float
+- Генерирует `model_weights.h`: массивы в PROGMEM, таблица tanh, описание слоёв
 
 ---
 
-## Цикл управления (500 Гц)
+## Цикл управления (100 Гц)
 
 ```
 Timer1 CTC interrupt (2 ms):
   1. Читаем AS5600 (I2C) → raw_angle (0-4095)
   2. Квантование + шум + дифференцирование + ФНЧ (SensorBlock)
-  3. Строим features: [sinθ1, cosθ1, dθ1, dx] (Q7.8 fixed-point)
-  4. INT8 inference: Linear(4→32) → Tanh → Linear(32→1)
+  3. Строим features: [sinθ1, cosθ1, dθ1, dx] (float, единицы обучения)
+  4. INT8 inference: нормализация (mean/std) → Q7.8 → слои из model_weights.h
   5. Деквантование выхода → force (float)
   6. TB6612: PWM duty + DIR
 ```
@@ -124,7 +134,7 @@ Timer1 CTC interrupt (2 ms):
 
 - `Wire.h` (I2C) — встроена
 - `avr/pgmspace.h` (PROGMEM) — встроена
-- `TimerOne` или ручная настройка Timer1 — для 500 Гц прерывания
+- `TimerOne` или ручная настройка Timer1 — для 100 Гц прерывания
 
 ---
 
