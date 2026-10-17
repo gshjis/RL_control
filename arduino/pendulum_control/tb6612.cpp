@@ -38,8 +38,10 @@ uint8_t TB6612::forceToPWM(float force_n) const {
   // Линейное отображение: 0..MAX_FORCE_N → 0..255
   // Можно добавить deadband compensation
   float ratio = force_n / MAX_FORCE_N;
-  uint8_t pwm = (uint8_t)roundf(ratio * 255.0f);
-  return constrain(pwm, 0, 255);
+  float pwm = roundf(ratio * 255.0f);
+  if (pwm < 0.0f) pwm = 0.0f;
+  if (pwm > 255.0f) pwm = 255.0f;
+  return (uint8_t)pwm;
 }
 
 void TB6612::enable() {

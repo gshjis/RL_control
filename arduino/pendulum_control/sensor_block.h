@@ -32,7 +32,7 @@ public:
   bool update(uint16_t raw_pendulum, uint16_t raw_cart, Telemetry& out);
 
   // Геттеры для отладки
-  float getTheta1Rad() const { return _theta1_rad; }
+  float getTheta1Rad() const { return _theta1_filtered; }
   float getDTheta1() const { return _dtheta1_filtered; }
   float getCartPos() const { return _x_filtered; }
   float getCartVel() const { return _dx_filtered; }

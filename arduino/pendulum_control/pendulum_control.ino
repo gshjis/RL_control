@@ -35,7 +35,7 @@ QuantizedInference inference(&g_quantized_model);
 TB6612 motor;
 
 // Телеметрия
-SensorBlock::Telemetry telemetry;
+Telemetry telemetry;
 
 // Флаги
 volatile bool _control_flag = false;
@@ -197,12 +197,12 @@ void loop() {
   // --- 7. Отладка ---
 #ifdef DEBUG_SERIAL
   if (_loop_count % 500 == 0) {  // 1 раз в секунду
-    DEBUG_PRINT(F("θ1=")); DEBUG_PRINT(telemetry.x, 4);
-    DEBUG_PRINT(F(" sin=")); DEBUG_PRINT(telemetry.sin_t1, 3);
-    DEBUG_PRINT(F(" cos=")); DEBUG_PRINT(telemetry.cos_t1, 3);
-    DEBUG_PRINT(F(" dθ=")); DEBUG_PRINT(telemetry.dtheta1, 3);
-    DEBUG_PRINT(F(" dx=")); DEBUG_PRINT(telemetry.dx, 3);
-    DEBUG_PRINT(F(" force=")); DEBUG_PRINTLN(force, 3);
+    Serial.print(F("x=")); Serial.print(telemetry.x, 4);
+    Serial.print(F(" sin=")); Serial.print(telemetry.sin_t1, 3);
+    Serial.print(F(" cos=")); Serial.print(telemetry.cos_t1, 3);
+    Serial.print(F(" dθ=")); Serial.print(telemetry.dtheta1, 3);
+    Serial.print(F(" dx=")); Serial.print(telemetry.dx, 3);
+    Serial.print(F(" force=")); Serial.println(force, 3);
   }
 #endif
 }
