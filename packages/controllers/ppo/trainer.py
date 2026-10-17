@@ -68,6 +68,7 @@ class ValidationCallback(BaseCallback):
 
         episode_rewards: list[float] = []
         final_cos_theta1_list: list[float] = []
+        upright_fractions: list[float] = []
         for _ in range(self.n_eval_episodes):
             obs_any = self.eval_env.reset()
             # VecNormalize.reset() returns np.ndarray for vectorized envs
@@ -104,6 +105,7 @@ class ValidationCallback(BaseCallback):
             done = False
             ep_reward = 0.0
             steps = 0
+            upright_steps = 0
             final_cos_theta1 = cos_theta1  # track final cos(theta1)
             while not done and steps < self.max_episode_steps:
                 actions, _ = self.model.predict(
@@ -113,25 +115,40 @@ class ValidationCallback(BaseCallback):
                 obs_next = step_result[0]
                 rewards = step_result[1]
                 dones = step_result[2]
+                infos = step_result[3]
                 obs_arr = obs_next[0] if isinstance(obs_next, tuple) else obs_next
                 assert isinstance(obs_arr, np.ndarray), (
                     f"Expected ndarray, got {type(obs_arr)}"
                 )
+                done = bool(dones[0])
+                # VecEnv автосбрасывает среду на терминальном шаге: obs_next —
+                # это уже стартовое наблюдение следующего эпизода (theta1=0,
+                # cos=1), а реальное последнее состояние лежит в info.
+                terminal_obs = infos[0].get("terminal_observation") if done else None
+                measured_obs = (
+                    np.asarray(terminal_obs, dtype=np.float64).reshape(1, -1)
+                    if terminal_obs is not None
+                    else obs_arr
+                )
                 # Get raw observation for cos(theta1) tracking
-                obs_raw = vec_norm.unnormalize_obs(obs_arr)
+                obs_raw = vec_norm.unnormalize_obs(measured_obs)
                 assert isinstance(obs_raw, np.ndarray)
                 final_cos_theta1 = (
                     float(obs_raw[0, 1]) if obs_raw.ndim == 2 else float(obs_raw[1])
                 )
+                if final_cos_theta1 < self._upright_cos_threshold:
+                    upright_steps += 1
                 ep_reward += float(rewards[0])
                 steps += 1
-                done = bool(dones[0])
+            upright_fraction = upright_steps / steps if steps else 0.0
             episode_rewards.append(ep_reward)
             final_cos_theta1_list.append(final_cos_theta1)
+            upright_fractions.append(upright_fraction)
             if self.verbose:
                 print(
                     f"  [Validation] Episode done: reward={ep_reward:.3f}, "
-                    f"steps={steps}, final_cos(theta1)={final_cos_theta1:.3f}"
+                    f"steps={steps}, final_cos(theta1)={final_cos_theta1:.3f}, "
+                    f"upright_fraction={upright_fraction:.3f}"
                 )
 
         if not episode_rewards:
@@ -140,9 +157,15 @@ class ValidationCallback(BaseCallback):
             return
 
         mean_reward = float(np.mean(episode_rewards))
-        mean_final_cos = float(np.mean(final_cos_theta1_list)) if final_cos_theta1_list else 0.0
+        mean_final_cos = (
+            float(np.mean(final_cos_theta1_list)) if final_cos_theta1_list else 0.0
+        )
+        mean_upright_fraction = (
+            float(np.mean(upright_fractions)) if upright_fractions else 0.0
+        )
         self.logger.record("eval/mean_reward", mean_reward)
         self.logger.record("eval/mean_final_cos_theta1", mean_final_cos)
+        self.logger.record("eval/upright_fraction", mean_upright_fraction)
         self.logger.dump(self.num_timesteps)
 
         # Сохраняем отдельный snapshot после каждой валидации. Помимо весов
@@ -162,6 +185,7 @@ class ValidationCallback(BaseCallback):
                 f"[Eval] timesteps={self.num_timesteps} | "
                 f"mean_reward={mean_reward:.4f} | "
                 f"mean_final_cos(theta1)={mean_final_cos:.3f} | "
+                f"upright_fraction={mean_upright_fraction:.3f} | "
                 f"saved={checkpoint_path}.zip"
             )
 
@@ -230,6 +254,10 @@ class PPOTrainer:
             # reward function instead of VecNormalize's running statistics.
             norm_reward=False,
         )
+        # Валидация не должна обновлять running-статистику: иначе за 2 эпизода
+        # по 10000 шагов eval-нормализация уезжает от тренировочной, и модель
+        # видит на оценке не те входы, к которым привыкла.
+        eval_vec_env.training = False
         eval_callback = ValidationCallback(
             eval_env=eval_vec_env,
             eval_freq=self._ppo_config.eval_freq,
