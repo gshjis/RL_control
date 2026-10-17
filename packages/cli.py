@@ -7,8 +7,7 @@
     python -m packages record [--model NAME] [--duration S] [--max-steps N]
     [--fps N] [--output PATH]
     python -m packages profile [--duration S] [--plot]
-    python -m packages firmware --model-dir DIR [--sketch DIR]
-    [--output-dir DIR] [--max-force F] [--hidden-dim N]
+    python -m packages firmware --model-dir DIR [--sketch DIR] [--output-dir DIR]
 
 Тяжёлые зависимости (Stable-Baselines3, Pygame, matplotlib) подгружаются
 только внутри нужной команды, поэтому ``--help`` работает мгновенно.
@@ -246,10 +245,6 @@ def cmd_firmware(args: argparse.Namespace) -> int:
                 str(checkpoint),
                 "--output",
                 str(weights),
-                "--max-force",
-                str(args.max_force),
-                "--hidden-dim",
-                str(args.hidden_dim),
             ],
             cwd=PROJECT_ROOT,
             check=True,
@@ -409,20 +404,6 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="куда скопировать firmware.hex "
         f"(по умолчанию: {FIRMWARE_ROOT}/<имя чекпоинта>)",
-    )
-    firmware.add_argument(
-        "--max-force",
-        type=float,
-        dest="max_force",
-        default=default().controller.max_force,
-        help="максимальная сила, Н (масштаб выхода НС; по умолчанию из пресета)",
-    )
-    firmware.add_argument(
-        "--hidden-dim",
-        type=int,
-        dest="hidden_dim",
-        default=32,
-        help="размер скрытого слоя НС (по умолчанию: 32)",
     )
     firmware.set_defaults(handler=cmd_firmware)
 

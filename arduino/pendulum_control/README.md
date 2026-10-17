@@ -12,8 +12,9 @@
 | **Наблюдение** | 4 признака: `[sinθ1, cosθ1, dθ1, dx]` |
 | **Действие** | Сила в `[-max_force, +max_force]` → PWM + DIR |
 | **Частота управления** | 500 Гц (2 мс) |
-| **Квантование** | Post-training INT8 asymmetric |
-| **Архитектура НС** | MLP: `4 → 32 → 1` (Tanh) |
+| **Квантование** | Post-training INT8, веса симметрично per-tensor |
+| **Архитектура НС** | любая MLP — задаётся моделью через `model_weights.h` |
+| **Нормализация входа** | статистика `VecNormalize` из чекпоинта |
 
 ---
 
@@ -37,7 +38,8 @@
 pendulum_control/
 ├── pendulum_control.ino       # Основной скетч
 ├── config.h                   # Пины, частоты, константы
-├── model_weights.h            # INT8 веса в PROGMEM (генерируется)
+├── model_schema.h             # struct QuantizedModel/QuantizedLayer
+├── model_weights.h            # INT8 веса + LUT + нормализация (генерируется)
 ├── inference.h / inference.cpp # INT8 forward pass (Q7.8 fixed-point)
 ├── as5600.h / as5600.cpp      # I2C драйвер AS5600
 ├── sensor_block.h / sensor_block.cpp # Квантование/шум/дифф/ФНЧ
@@ -84,9 +86,10 @@ poetry run python tools/export_quantize.py \
 ```
 
 Скрипт `export_quantize.py`:
-- Загружает PPO политику (weights + architecture)
-- Применяет INT8 asymmetric quantization per-tensor
-- Генерирует `model_weights.h` с массивами в PROGMEM
+- Загружает PPO политику (weights + architecture) и статистику `VecNormalize`
+- Берёт из модели все слои — число и размер скрытых слоёв настраивать не нужно
+- Квантует веса в INT8 (симметрично, per-tensor); bias остаётся float
+- Генерирует `model_weights.h`: массивы в PROGMEM, таблица tanh, описание слоёв
 
 ---
 
@@ -96,8 +99,8 @@ poetry run python tools/export_quantize.py \
 Timer1 CTC interrupt (2 ms):
   1. Читаем AS5600 (I2C) → raw_angle (0-4095)
   2. Квантование + шум + дифференцирование + ФНЧ (SensorBlock)
-  3. Строим features: [sinθ1, cosθ1, dθ1, dx] (Q7.8 fixed-point)
-  4. INT8 inference: Linear(4→32) → Tanh → Linear(32→1)
+  3. Строим features: [sinθ1, cosθ1, dθ1, dx] (float, единицы обучения)
+  4. INT8 inference: нормализация (mean/std) → Q7.8 → слои из model_weights.h
   5. Деквантование выхода → force (float)
   6. TB6612: PWM duty + DIR
 ```

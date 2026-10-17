@@ -9,7 +9,7 @@
  *   - TB6612FNG: DC мотор (PWM + DIR)
  * 
  * Частота: 500 Гц (Timer1 CTC interrupt)
- * НС: MLP 4→32→1 (INT8, Tanh)
+ * НС: MLP произвольной архитектуры (INT8), задаётся model_weights.h
  */
 
 #include <Wire.h>
@@ -163,34 +163,19 @@ void loop() {
   sensor_block.update(raw_pendulum, raw_cart, telemetry);
   
   // --- 3. Построение признаков для НС ---
-  // [sinθ1, cosθ1, dθ1, dx] — в Q7.8 (int16_t)
-  int16_t features_q[NN_INPUT_DIM];
-  
-  // sinθ1, cosθ1 уже в [-1, 1] → Q7.8
-  features_q[0] = (int16_t)roundf(telemetry.sin_t1 * 256.0f);
-  features_q[1] = (int16_t)roundf(telemetry.cos_t1 * 256.0f);
-  
-  // dθ1 в рад/с — масштабируем (предполагаем ±20 рад/с)
-  features_q[2] = (int16_t)roundf(telemetry.dtheta1 * 12.8f);  // 256/20 ≈ 12.8
-  
-  // dx в м/с — масштабируем (предполагаем ±2 м/с)
-  features_q[3] = (int16_t)roundf(telemetry.dx * 128.0f);  // 256/2 = 128
-  
-  // Клиппинг в int16_t
-  for (int i = 0; i < NN_INPUT_DIM; i++) {
-    features_q[i] = constrain(features_q[i], -32768, 32767);
-  }
-  
+  // Порядок как при обучении: [sinθ1, cosθ1, dθ1, dx], в единицах обучения.
+  // Нормализация (статистика VecNormalize) и квантование — внутри forward().
+#if NN_INPUT_DIM != 4
+#error "Скетч строит 4 признака; для другой размерности обновите этот блок"
+#endif
+  float features[NN_INPUT_DIM];
+  features[0] = telemetry.sin_t1;
+  features[1] = telemetry.cos_t1;
+  features[2] = telemetry.dtheta1;
+  features[3] = telemetry.dx;
+
   // --- 4. INT8 Inference ---
-  // Конвертируем Q7.8 → int8_t для входа НС
-  int8_t input_q8[NN_INPUT_DIM];
-  for (int i = 0; i < NN_INPUT_DIM; i++) {
-    // Масштабируем из Q7.8 в диапазон int8_t (-128..127)
-    // input_scale из модели учитывает это
-    input_q8[i] = (int8_t)constrain(features_q[i] >> 3, -128, 127);  // /8 = /256*32
-  }
-  
-  float force = inference.forwardQuantized(input_q8);
+  float force = inference.forward(features);
   
   // --- 5. Безопасность ---
   // Лимит позиции тележки

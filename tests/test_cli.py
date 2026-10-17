@@ -75,14 +75,12 @@ def test_firmware_requires_model_dir() -> None:
         build_parser().parse_args(["firmware"])
 
 
-def test_firmware_defaults_follow_preset() -> None:
-    """firmware берёт max_force из пресета и скетч по умолчанию."""
+def test_firmware_defaults() -> None:
+    """firmware по умолчанию собирает штатный скетч и печатает .hex в artifacts."""
     args = build_parser().parse_args(["firmware", "--model-dir", "/tmp/model"])
 
     assert args.handler is cmd_firmware
     assert args.model_dir == Path("/tmp/model")
-    assert args.max_force == 24.0
-    assert args.hidden_dim == 32
     assert args.sketch.name == "pendulum_control"
     assert args.output_dir is None
 

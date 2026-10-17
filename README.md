@@ -54,13 +54,15 @@ python -m packages firmware --model-dir /полный/путь/к/папке/с/
 обучение, рядом `_config.json`/`_vecnormalize.pkl`) или `<name>.zip` (снимок
 валидации). Команда:
 
-1. квантует веса в `arduino/pendulum_control/model_weights.h`;
+1. квантует веса в `arduino/pendulum_control/model_weights.h` — архитектура
+   (число и размер скрытых слоёв) берётся из модели, вручную её задавать не
+   нужно; статистика `VecNormalize` тоже попадает в заголовок;
 2. собирает прошивку через PlatformIO (`pio run`);
 3. копирует `firmware_<name>_<env>.hex` в `artifacts/firmware/<name>/`.
 
 Флаги: `--sketch DIR` (другой скетч), `--output-dir DIR` (куда копировать
-`.hex`), `--max-force N`, `--hidden-dim N`. Без PlatformIO сборка
-завершается с понятной ошибкой (`pip install platformio`).
+`.hex`). Без PlatformIO сборка завершается с понятной ошибкой
+(`pip install platformio`).
 
 ---
 
